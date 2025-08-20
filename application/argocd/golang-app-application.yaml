@@ -1,0 +1,181 @@
+# ArgoCD Application for Golang HA Server
+# This defines the GitOps configuration for automated deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: golang-ha-app
+  namespace: argocd
+  labels:
+    app: golang-ha-app
+    component: gitops
+spec:
+  project: default
+  
+  # Source repository configuration
+  source:
+    repoURL: https://github.com/Cris245/Terraform-k8s.git
+    targetRevision: main
+    path: application/k8s-manifests
+    
+    # Directory configuration
+    directory:
+      recurse: true
+      include: "*.yaml"
+      exclude: "waf-config.yaml"  # WAF handled separately
+      
+  # Destination cluster configuration  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: golang-app
+    
+  # Sync policy for automated GitOps
+  syncPolicy:
+    automated:
+      prune: true        # Remove resources not in Git
+      selfHeal: true     # Automatically fix drift
+      allowEmpty: false  # Don't sync empty directories
+      
+    syncOptions:
+      - CreateNamespace=true           # Auto-create namespace
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true                # Delete in correct order
+      - ApplyOutOfSyncOnly=true       # Only apply out-of-sync resources
+      - RespectIgnoreDifferences=true # Respect ignoreDifferences
+      
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+        
+  # Health check configuration
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas    # Ignore HPA-managed replicas
+    
+  - group: ""
+    kind: Service
+    jsonPointers:
+    - /spec/clusterIP   # Ignore auto-assigned cluster IPs
+    
+  # Revision history
+  revisionHistoryLimit: 10
+  
+  # Resource management
+  info:
+  - name: Description
+    value: "Golang HA Server - Production Application"
+  - name: Environment
+    value: "production"
+  - name: Team
+    value: "platform-engineering"
+
+---
+# ArgoCD Application for Istio Configuration
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: golang-ha-istio
+  namespace: argocd
+  labels:
+    app: golang-ha-istio
+    component: service-mesh
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/Cris245/Terraform-k8s.git
+    targetRevision: main
+    path: application/istio-config
+    
+    directory:
+      recurse: true
+      include: "*.yaml"
+      
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: golang-app
+    
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+      
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ApplyOutOfSyncOnly=true
+      
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+        
+  # Istio resource specific configurations
+  ignoreDifferences:
+  - group: networking.istio.io
+    kind: VirtualService
+    jsonPointers:
+    - /spec/http/*/route/*/weight  # Ignore canary weight changes
+    
+  revisionHistoryLimit: 5
+  
+  info:
+  - name: Description
+    value: "Istio Service Mesh Configuration"
+  - name: Dependencies
+    value: "Requires golang-ha-app to be synced first"
+
+---
+# ArgoCD Application for Security Policies
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: golang-ha-security
+  namespace: argocd
+  labels:
+    app: golang-ha-security
+    component: security
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/Cris245/Terraform-k8s.git
+    targetRevision: main
+    path: security
+    
+    directory:
+      recurse: true
+      include: "*.yaml"
+      
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system  # Security policies often go here
+    
+  syncPolicy:
+    # Manual sync for security policies (more control)
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ApplyOutOfSyncOnly=true
+      
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 10m
+        
+  revisionHistoryLimit: 10
+  
+  info:
+  - name: Description
+    value: "Security Policies and Configurations"
+  - name: Approval
+    value: "Manual sync required for security changes"

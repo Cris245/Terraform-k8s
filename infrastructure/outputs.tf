@@ -61,3 +61,29 @@ output "waf_rules_summary" {
   description = "Summary of configured WAF rules"
   value       = module.waf.waf_rules_summary
 }
+
+# Audit logging outputs
+output "audit_dataset_id" {
+  description = "BigQuery dataset ID for audit logs"
+  value       = module.audit_logging.audit_dataset_id
+}
+
+output "audit_logs_bucket_name" {
+  description = "Cloud Storage bucket name for audit logs"
+  value       = module.audit_logging.audit_logs_bucket_name
+}
+
+output "audit_dashboard_url" {
+  description = "Audit logging dashboard URL"
+  value       = module.audit_logging.audit_dashboard_url
+}
+
+output "audit_monitoring_urls" {
+  description = "Audit monitoring and investigation URLs"
+  value       = module.audit_logging.monitoring_urls
+}
+
+output "audit_compliance_queries" {
+  description = "Pre-built compliance reporting queries"
+  value       = module.audit_logging.compliance_queries
+}

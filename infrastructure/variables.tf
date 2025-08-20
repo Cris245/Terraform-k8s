@@ -124,6 +124,111 @@ variable "waf_log_sampling_rate" {
   default     = 0.1
 }
 
+# Audit Logging Configuration
+variable "audit_dataset_location" {
+  description = "Location for BigQuery audit dataset"
+  type        = string
+  default     = "EU"  # Aligns with European deployment
+}
+
+variable "audit_logs_location" {
+  description = "Location for Cloud Storage audit logs bucket"
+  type        = string
+  default     = "EUROPE-WEST1"
+}
+
+variable "audit_log_retention_days" {
+  description = "Number of days to retain audit logs"
+  type        = number
+  default     = 365  # 1 year retention for compliance
+}
+
+variable "enable_audit_alerting" {
+  description = "Enable audit logging alert policies"
+  type        = bool
+  default     = true
+}
+
+variable "audit_failed_auth_threshold" {
+  description = "Threshold for failed authentication alerts (per 5 minutes)"
+  type        = number
+  default     = 5
+}
+
+variable "audit_notification_channels" {
+  description = "List of notification channel IDs for audit alerts"
+  type        = list(string)
+  default     = []
+}
+
+variable "audit_compliance_mode" {
+  description = "Audit compliance mode (basic, extended, strict)"
+  type        = string
+  default     = "extended"
+}
+
+variable "audit_enable_data_access_logs" {
+  description = "Enable data access audit logs (can be expensive)"
+  type        = bool
+  default     = false
+}
+
+variable "audit_enable_admin_activity_logs" {
+  description = "Enable admin activity audit logs"
+  type        = bool
+  default     = true
+}
+
+# ArgoCD GitOps Configuration
+variable "argocd_git_repository_url" {
+  description = "Git repository URL for ArgoCD GitOps"
+  type        = string
+  default     = "https://github.com/Cris245/Terraform-k8s.git"
+}
+
+variable "argocd_admin_password" {
+  description = "ArgoCD admin password"
+  type        = string
+  default     = "admin123"
+  sensitive   = true
+}
+
+variable "argocd_ha_enabled" {
+  description = "Enable high availability mode for ArgoCD"
+  type        = bool
+  default     = false  # Keep it simple for demo/interview
+}
+
+variable "argocd_enable_ingress" {
+  description = "Enable Ingress for ArgoCD server"
+  type        = bool
+  default     = true
+}
+
+variable "argocd_enable_monitoring" {
+  description = "Enable Prometheus monitoring for ArgoCD"
+  type        = bool
+  default     = true
+}
+
+variable "argocd_admin_groups" {
+  description = "List of groups with ArgoCD admin access"
+  type        = list(string)
+  default     = ["argocd-admins", "platform-engineering"]
+}
+
+variable "argocd_developer_groups" {
+  description = "List of groups with ArgoCD developer access"
+  type        = list(string)
+  default     = ["developers"]
+}
+
+variable "argocd_sre_groups" {
+  description = "List of groups with ArgoCD SRE access"
+  type        = list(string)
+  default     = ["sre-team"]
+}
+
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string

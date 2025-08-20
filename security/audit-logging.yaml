@@ -108,7 +108,7 @@ spec:
         image: fluent/fluentd-kubernetes-daemonset:v1-debian-stackdriver
         env:
         - name: FLUENT_STACKDRIVER_PROJECT_ID
-          value: "PROJECT_ID"
+          value: "YOUR_PROJECT_ID"
         - name: FLUENT_STACKDRIVER_METADATA_ZONE
           value: "us-central1-a"
         - name: FLUENT_STACKDRIVER_METADATA_SERVICE_NAME

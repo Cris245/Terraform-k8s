@@ -59,3 +59,24 @@ waf_blocked_user_agents = [
   "acunetix",
   "nessus"
 ]
+
+# Audit Logging Configuration
+audit_dataset_location          = "EU"                # EU for European deployment
+audit_logs_location             = "EUROPE-WEST1"      # Match primary region
+audit_log_retention_days        = 365                 # 1 year retention
+enable_audit_alerting           = true
+audit_failed_auth_threshold     = 5                   # Alert after 5 failed auth attempts
+audit_notification_channels     = []                  # Add notification channel IDs
+audit_compliance_mode           = "extended"          # basic, extended, strict
+audit_enable_data_access_logs   = false              # Expensive, enable for strict compliance
+audit_enable_admin_activity_logs = true
+
+# ArgoCD GitOps Configuration
+argocd_git_repository_url    = "https://github.com/Cris245/Terraform-k8s.git"
+argocd_admin_password        = "your-secure-password-here"    # Change this!
+argocd_ha_enabled           = false                           # Simple single instance
+argocd_enable_ingress       = true                            # Use Istio ingress
+argocd_enable_monitoring    = true                            # Prometheus metrics
+argocd_admin_groups         = ["argocd-admins", "platform-engineering"]
+argocd_developer_groups     = ["developers"]
+argocd_sre_groups          = ["sre-team"]
