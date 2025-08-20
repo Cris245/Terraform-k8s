@@ -1,0 +1,92 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform/
+.terraform.lock.hcl
+terraform.tfplan
+terraform.tfplan.*
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+.kube/
+
+# GCP
+.gcp/
+service-account-key.json
+gcp-key.json
+
+# Secrets
+secrets.yaml
+*-secret.yaml
+*.pem
+*.key
+*.crt
+!dummy.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+log/
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+\#*#
+.*.sw[a-z]
+*.un~
+Session.vim
+.netrwhist
+
+# Test results
+load_test_results.txt
+test-results/
+coverage.out
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Local development
+.env
+.env.local
+.env.*.local
+local.yaml
+dev.yaml
+
+# Helm
+charts/*.tgz
+
+# Docker
+.docker/
+
+# Backup files
+*.backup
+*.bak
+*.tfstate*
+.terraform/

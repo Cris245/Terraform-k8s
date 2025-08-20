@@ -1,0 +1,33 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: golang-app-failover-vs
+  namespace: golang-app
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - golang-app-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: golang-app-service
+        port:
+          number: 80
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+    timeout: 10s
+    fault:
+      delay:
+        percentage:
+          value: 0
+        fixedDelay: 1ms
+      abort:
+        percentage:
+          value: 0
+        httpStatus: 500

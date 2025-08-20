@@ -1,0 +1,164 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-policy
+  namespace: kube-system
+data:
+  audit-policy.yaml: |
+    apiVersion: audit.k8s.io/v1
+    kind: Policy
+    rules:
+    # Log pod changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: ""
+        resources: ["pods"]
+    
+    # Log deployment changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: "apps"
+        resources: ["deployments"]
+    
+    # Log service changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: ""
+        resources: ["services"]
+    
+    # Log ingress changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: "networking.k8s.io"
+        resources: ["ingresses"]
+    
+    # Log secret changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: ""
+        resources: ["secrets"]
+    
+    # Log configmap changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: ""
+        resources: ["configmaps"]
+    
+    # Log RBAC changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: "rbac.authorization.k8s.io"
+        resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    
+    # Log namespace changes at RequestResponse level
+    - level: RequestResponse
+      resources:
+      - group: ""
+        resources: ["namespaces"]
+    
+    # Log all other resources at Metadata level
+    - level: Metadata
+      resources:
+      - group: ""
+        resources: ["*"]
+      - group: "apps"
+        resources: ["*"]
+      - group: "networking.k8s.io"
+        resources: ["*"]
+      - group: "rbac.authorization.k8s.io"
+        resources: ["*"]
+    
+    # Log authentication at RequestResponse level
+    - level: RequestResponse
+      users: ["system:serviceaccount:*"]
+      verbs: ["create", "update", "patch", "delete"]
+    
+    # Log all requests from the kubelet
+    - level: Metadata
+      userGroups: ["system:nodes"]
+    
+    # Log all requests from the system:masters group
+    - level: RequestResponse
+      userGroups: ["system:masters"]
+    
+    # A catch-all rule to log all other requests at the Metadata level
+    - level: Metadata
+      omitStages:
+      - "RequestReceived"
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: audit-log-forwarder
+  namespace: kube-system
+  labels:
+    app: audit-log-forwarder
+spec:
+  selector:
+    matchLabels:
+      app: audit-log-forwarder
+  template:
+    metadata:
+      labels:
+        app: audit-log-forwarder
+    spec:
+      serviceAccountName: audit-log-forwarder
+      containers:
+      - name: fluentd
+        image: fluent/fluentd-kubernetes-daemonset:v1-debian-stackdriver
+        env:
+        - name: FLUENT_STACKDRIVER_PROJECT_ID
+          value: "PROJECT_ID"
+        - name: FLUENT_STACKDRIVER_METADATA_ZONE
+          value: "us-central1-a"
+        - name: FLUENT_STACKDRIVER_METADATA_SERVICE_NAME
+          value: "golang-ha-cluster"
+        - name: FLUENT_STACKDRIVER_METADATA_SERVICE_VERSION
+          value: "v1.0.0"
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        - name: audit-log
+          mountPath: /var/log/audit
+          readOnly: true
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: audit-log
+        hostPath:
+          path: /var/log/audit
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: audit-log-forwarder
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: audit-log-forwarder
+rules:
+- apiGroups: [""]
+  resources: ["pods", "namespaces"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: audit-log-forwarder
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: audit-log-forwarder
+subjects:
+- kind: ServiceAccount
+  name: audit-log-forwarder
+  namespace: kube-system

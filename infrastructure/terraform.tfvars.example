@@ -1,0 +1,35 @@
+# GCP Project Configuration
+project_id = "your-gcp-project-id"
+
+# Region Configuration
+primary_region   = "europe-west1"  # Belgium - closest to Spain
+secondary_region = "europe-west3"  # Frankfurt - good backup option
+regions          = ["europe-west1", "europe-west3"]
+
+# Node Pools Configuration
+node_pools = {
+  primary = {
+    machine_type = "e2-standard-2"
+    node_count   = 3
+    disk_size_gb = 50
+    disk_type    = "pd-standard"
+    preemptible  = false
+  }
+  secondary = {
+    machine_type = "e2-standard-2"
+    node_count   = 2
+    disk_size_gb = 50
+    disk_type    = "pd-standard"
+    preemptible  = true
+  }
+}
+
+# Environment Configuration
+environment = "production"
+
+# Domain Configuration
+domain_name = "golang-ha.example.com"
+
+# Feature Flags
+enable_monitoring = true
+enable_argocd     = true
