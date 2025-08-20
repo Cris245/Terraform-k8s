@@ -42,6 +42,11 @@ secrets.yaml
 ehthumbs.db
 Thumbs.db
 
+# Personal interview notes
+INTERVIEW_SUMMARY.md
+*_NOTES.md
+*_PREP.md
+
 # Logs
 *.log
 logs/

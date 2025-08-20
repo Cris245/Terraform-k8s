@@ -28,6 +28,7 @@ This repository contains a comprehensive solution demonstrating enterprise-grade
 - **Pod Security Standards**: Replacing deprecated PSPs
 - **Network Policies**: Micro-segmentation
 - **Vault Integration**: Secret management
+- **WAF Protection**: Cloud Armor with OWASP Top 10 coverage
 - **HTTPS**: Self-signed certificates on port 443
 
 ### Comprehensive Monitoring
@@ -76,6 +77,9 @@ gcloud container clusters get-credentials golang-ha-secondary --region YOUR_SECO
 cd ../application
 kubectl apply -f k8s-manifests/deployment-simple.yaml
 kubectl apply -f istio-config/working-canary-vs.yaml
+
+# Deploy WAF configuration (optional)
+kubectl apply -f k8s-manifests/waf-config.yaml
 ```
 
 ### 5. Test Canary Deployment
@@ -153,6 +157,7 @@ curl https://$GATEWAY_IP/health -k
 ### Security & Compliance
 - **Zero Trust Model**: Never trust, always verify
 - **Pod Security**: Enforced security standards
+- **WAF Protection**: Cloud Armor with comprehensive attack prevention
 - **Secret Management**: HashiCorp Vault integration
 - **Network Security**: Policies and segmentation
 

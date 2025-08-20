@@ -33,3 +33,29 @@ domain_name = "golang-ha.example.com"
 # Feature Flags
 enable_monitoring = true
 enable_argocd     = true
+
+# WAF (Cloud Armor) Configuration
+waf_rate_limit_requests              = 100    # Requests per interval
+waf_rate_limit_interval              = 60     # Seconds
+waf_ban_duration_sec                 = 600    # 10 minutes ban
+waf_blocked_countries                = []     # e.g., ["CN", "RU", "KP"]
+waf_trusted_ip_ranges                = []     # e.g., ["10.0.0.0/8"]
+waf_enable_health_check_throttling   = true
+waf_enable_adaptive_protection       = true
+waf_log_sampling_rate                = 0.1   # 10% of requests logged
+
+# Additional blocked user agents (beyond default list)
+waf_blocked_user_agents = [
+  "sqlmap",
+  "nikto", 
+  "nmap",
+  "masscan",
+  "zap",
+  "w3af",
+  "dirbuster",
+  "gobuster",
+  "dirb",
+  "burpsuite",
+  "acunetix",
+  "nessus"
+]

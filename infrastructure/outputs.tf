@@ -40,3 +40,24 @@ output "kubectl_commands" {
     "gcloud container clusters get-credentials ${module.gke_secondary.cluster_name} --region ${var.secondary_region} --project ${var.project_id}"
   ]
 }
+
+# WAF outputs
+output "waf_security_policy_name" {
+  description = "Name of the Cloud Armor security policy"
+  value       = module.waf.security_policy_name
+}
+
+output "waf_security_policy_id" {
+  description = "ID of the Cloud Armor security policy"
+  value       = module.waf.security_policy_id
+}
+
+output "waf_ssl_policy_name" {
+  description = "Name of the SSL policy"
+  value       = module.waf.ssl_policy_name
+}
+
+output "waf_rules_summary" {
+  description = "Summary of configured WAF rules"
+  value       = module.waf.waf_rules_summary
+}

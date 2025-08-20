@@ -116,3 +116,44 @@ module "argocd" {
   
   depends_on = [module.gke_primary, module.gke_secondary]
 }
+
+# Web Application Firewall (Cloud Armor)
+module "waf" {
+  source = "./modules/waf"
+  
+  project_id   = var.project_id
+  project_name = "golang-ha"
+  
+  # Rate limiting configuration
+  rate_limit_requests = var.waf_rate_limit_requests
+  rate_limit_interval = var.waf_rate_limit_interval
+  ban_duration_sec    = var.waf_ban_duration_sec
+  
+  # Geographic restrictions
+  blocked_countries = var.waf_blocked_countries
+  trusted_ip_ranges = var.waf_trusted_ip_ranges
+  
+  # User agent blocking
+  blocked_user_agents = var.waf_blocked_user_agents
+  
+  # Feature toggles
+  enable_health_check_throttling = var.waf_enable_health_check_throttling
+  enable_adaptive_protection     = var.waf_enable_adaptive_protection
+  
+  # Logging
+  waf_log_sampling_rate = var.waf_log_sampling_rate
+  
+  # Backend integration (when used with Istio Gateway)
+  create_backend_service = false  # We use Istio Gateway instead
+  create_url_map        = false   # We use Istio VirtualService instead
+  
+  # Labels
+  labels = {
+    environment = var.environment
+    component   = "waf"
+    managed-by  = "terraform"
+    project     = "golang-ha-server"
+  }
+  
+  depends_on = [google_project_service.required_apis]
+}

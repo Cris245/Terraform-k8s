@@ -1,0 +1,148 @@
+# BackendConfig for Cloud Armor integration with Istio Gateway
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: waf-backend-config
+  namespace: istio-system
+  labels:
+    app: istio-ingressgateway
+    component: waf
+spec:
+  securityPolicy:
+    name: "golang-ha-security-policy"  # This must match the Terraform output
+  healthCheck:
+    checkIntervalSec: 30
+    timeoutSec: 5
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /healthz/ready  # Istio gateway health endpoint
+    port: 15021                  # Istio gateway health port
+  logging:
+    enable: true
+    sampleRate: 0.1
+  timeoutSec: 30
+  connectionDraining:
+    drainingTimeoutSec: 300
+  
+---
+# Annotate the Istio Gateway service to use the BackendConfig
+apiVersion: v1
+kind: Service
+metadata:
+  name: istio-ingressgateway
+  namespace: istio-system
+  annotations:
+    cloud.google.com/backend-config: '{"default": "waf-backend-config"}'
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  # This service definition will be merged with the existing one
+  type: LoadBalancer
+  selector:
+    istio: ingressgateway
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http2
+  - port: 443
+    targetPort: 8443
+    name: https
+  - port: 15021
+    targetPort: 15021
+    name: status-port
+
+---
+# Ingress to connect GCP Load Balancer with Cloud Armor to Istio Gateway
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: waf-ingress
+  namespace: istio-system
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "golang-ha-global-ip"
+    networking.gke.io/v1beta1.BackendConfig: "waf-backend-config"
+    cloud.google.com/armor-config: '{"golang-ha-security-policy": "golang-ha-security-policy"}'
+    ingress.gcp.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  defaultBackend:
+    service:
+      name: istio-ingressgateway
+      port:
+        number: 80
+  rules:
+  - http:
+      paths:
+      - path: "/*"
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: istio-ingressgateway
+            port:
+              number: 80
+
+---
+# FrontendConfig for SSL and HTTPS redirect
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: waf-frontend-config
+  namespace: istio-system
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: "MOVED_PERMANENTLY_DEFAULT"
+  sslPolicy: "golang-ha-ssl-policy"  # This must match the Terraform output
+
+---
+# ManagedCertificate for automatic SSL certificate management
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: golang-ha-ssl-cert
+  namespace: istio-system
+spec:
+  domains:
+  - golang-ha.example.com  # Update this with your actual domain
+
+---
+# NetworkPolicy to allow traffic from GCP Load Balancer to Istio Gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gcp-load-balancer
+  namespace: istio-system
+spec:
+  podSelector:
+    matchLabels:
+      istio: ingressgateway
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow traffic from GCP Load Balancer (health checks and traffic)
+  - from:
+    - ipBlock:
+        cidr: 35.191.0.0/16  # GCP health check ranges
+    - ipBlock:
+        cidr: 209.85.152.0/22  # GCP health check ranges
+    - ipBlock:
+        cidr: 209.85.204.0/22  # GCP health check ranges
+    - ipBlock:
+        cidr: 130.211.0.0/22   # GCP Load Balancer ranges
+    ports:
+    - protocol: TCP
+      port: 8080  # HTTP
+    - protocol: TCP
+      port: 8443  # HTTPS
+    - protocol: TCP
+      port: 15021 # Health check
+  # Allow traffic from within the cluster
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8443
+    - protocol: TCP
+      port: 15021
