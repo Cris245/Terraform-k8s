@@ -28,7 +28,7 @@ This repository contains a comprehensive solution demonstrating enterprise-grade
 - **Pod Security Standards**: Replacing deprecated PSPs
 - **Network Policies**: Micro-segmentation
 - **Vault Integration**: Secret management
-- **WAF Protection**: Cloud Armor with OWASP Top 10 coverage
+- **WAF Protection**: Istio WAF-lite at the ingress gateway (deny unsafe methods, block known bad UAs, rate-limit /health and /metrics)
 - **Audit Logging**: Comprehensive GCP Cloud Logging with compliance reports
 - **HTTPS**: Self-signed certificates on port 443
 
@@ -158,7 +158,7 @@ curl https://$GATEWAY_IP/health -k
 ### Security & Compliance
 - **Zero Trust Model**: Never trust, always verify
 - **Pod Security**: Enforced security standards
-- **WAF Protection**: Cloud Armor with comprehensive attack prevention
+- **WAF Protection**: Istio gateway policies and Envoy filters
 - **Audit Logging**: GCP Cloud Logging with BigQuery analytics and alerting
 - **Secret Management**: HashiCorp Vault integration
 - **Network Security**: Policies and segmentation
