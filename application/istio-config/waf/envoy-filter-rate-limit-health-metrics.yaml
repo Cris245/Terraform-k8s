@@ -1,0 +1,50 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: ratelimit-health-metrics
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          filter:
+            name: envoy.filters.network.http_connection_manager
+            subFilter:
+              name: envoy.filters.http.router
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.lua
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          inlineCode: |
+            local limits = {
+              ["/health"] = {count = 5, interval = 60},
+              ["/metrics"] = {count = 5, interval = 60}
+            }
+            local store = {}
+            function envoy_on_request(handle)
+              local path = handle:headers():get(":path") or "/"
+              local remote = handle:streamInfo():downstreamDirectRemoteAddress()
+              local ip = remote and remote:addressAsString() or "unknown"
+              if limits[path] then
+                local key = ip .. "|" .. path
+                local now = os.time()
+                local bucket = store[key]
+                if not bucket or now - bucket.start >= limits[path].interval then
+                  bucket = {start = now, count = 0}
+                end
+                bucket.count = bucket.count + 1
+                store[key] = bucket
+                if bucket.count > limits[path].count then
+                  handle:respond({[":status"] = "429"}, "Too Many Requests\n")
+                  return
+                end
+              end
+            end
