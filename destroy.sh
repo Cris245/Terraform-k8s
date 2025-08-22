@@ -56,6 +56,9 @@ confirm_destruction() {
 destroy_infrastructure() {
     print_status "Destroying infrastructure with Terraform..."
     
+    # Change to infrastructure directory
+    cd infrastructure
+    
     # Initialize Terraform if needed
     if [ ! -d ".terraform" ]; then
         terraform init
@@ -69,6 +72,9 @@ destroy_infrastructure() {
     print_status "Applying Terraform destruction..."
     terraform apply destroy-plan
     
+    # Return to root directory
+    cd ..
+    
     print_success "Infrastructure destruction completed successfully"
 }
 
@@ -76,7 +82,11 @@ destroy_infrastructure() {
 cleanup_local_files() {
     print_status "Cleaning up local files..."
     
-    # Remove Terraform files
+    # Remove Terraform files from infrastructure directory
+    rm -f infrastructure/tfplan infrastructure/destroy-plan
+    rm -f infrastructure/terraform.tfvars.bak
+    
+    # Remove Terraform files from root directory
     rm -f tfplan destroy-plan
     rm -f terraform.tfvars.bak
     
