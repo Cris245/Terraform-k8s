@@ -1,167 +1,74 @@
 # Golang HA Infrastructure - Architecture Diagram
 
-## Complete Multi-Region GKE Architecture
+## High-Level Multi-Region GKE Architecture
 
 ```mermaid
 graph TB
     %% External Users
-    Users["External Users"] --> LB["Istio Gateway<br/>Load Balancer"]
-    
-    %% Load Balancer Layer
-    LB --> HTTPS["HTTPS (443)<br/>SSL Certificate"]
-    LB --> HTTP["HTTP (80)<br/>Auto-redirect to HTTPS"]
+    Users["External Users"] --> LB["Global Load Balancer"]
     
     %% Primary Region
-    subgraph "Primary Region"
-        subgraph "GKE Primary Cluster"
-            NP1["Node Pool 1<br/>3 nodes<br/>e2-standard-2"]
-            NP2["Node Pool 2<br/>2 nodes<br/>e2-standard-2<br/>Spot instances"]
+    subgraph "Primary Region (Europe-West1)"
+        subgraph "GKE Cluster"
+            ISTIO1["Istio Service Mesh<br/>Traffic Management & Security"]
+            APP1["Golang Application<br/>Production + Canary"]
         end
         
-        subgraph "Monitoring Stack"
-            PROM["Prometheus<br/>Metrics Collection"]
-            GRAF["Grafana<br/>Dashboards"]
-            ALERT["AlertManager<br/>Notifications"]
-        end
-        
-        subgraph "Application Layer"
-            APP1["Golang App<br/>Deployment"]
-            SVC1["Service<br/>ClusterIP"]
-            HPA1["HPA<br/>Auto-scaling"]
-            APP1_CANARY["Golang App Canary<br/>Single Replica"]
-        end
-        
-        subgraph "Istio Service Mesh"
-            GATEWAY1["Istio Gateway<br/>Traffic Entry"]
-            VS1["VirtualService<br/>80/20 Split"]
-            DR1["DestinationRule<br/>Load Balancing"]
-        end
-        
-        subgraph "Security Layer"
-            VAULT1["HashiCorp Vault<br/>Secret Management"]
-            PSP1["Pod Security<br/>Standards"]
-            NP_SEC1["Network Policies<br/>Traffic Control"]
-        end
-        
-        subgraph "Networking"
-            VPC1["VPC Network<br/>10.0.1.0/24"]
-            SUBNET1["Private Subnet<br/>10.0.1.0/26"]
-            NAT1["Cloud NAT<br/>Outbound Internet"]
+        subgraph "Supporting Services"
+            MON["Application Monitoring<br/>Prometheus + Grafana<br/>(Self-hosted)"]
+            SEC["Security Layer<br/>Vault + Policies"]
         end
     end
     
     %% Secondary Region
-    subgraph "Secondary Region"
-        subgraph "GKE Secondary Cluster"
-            NP3["Node Pool 3<br/>2 nodes<br/>e2-standard-2"]
-            NP4["Node Pool 4<br/>1 node<br/>e2-standard-2<br/>Spot instance"]
+    subgraph "Secondary Region (Europe-West3)"
+        subgraph "GKE Cluster"
+            ISTIO2["Istio Service Mesh<br/>Traffic Management & Security"]
+            APP2["Golang Application<br/>Disaster Recovery"]
         end
         
-        subgraph "Application Layer DR"
-            APP2["Golang App<br/>Deployment"]
-            SVC2["Service<br/>ClusterIP"]
-            HPA2["HPA<br/>Auto-scaling"]
-        end
-        
-        subgraph "Istio Service Mesh DR"
-            GATEWAY2["Istio Gateway<br/>Failover Entry"]
-            VS2["VirtualService<br/>Failover"]
-            DR2["DestinationRule<br/>Circuit Breaker"]
-        end
-        
-        subgraph "Security Layer DR"
-            VAULT2["HashiCorp Vault<br/>HA Replica"]
-            PSP2["Pod Security<br/>Standards"]
-            NP_SEC2["Network Policies<br/>Traffic Control"]
-        end
-        
-        subgraph "Networking DR"
-            VPC2["VPC Network<br/>10.0.2.0/24"]
-            SUBNET2["Private Subnet<br/>10.0.2.0/26"]
-            NAT2["Cloud NAT<br/>Outbound Internet"]
+        subgraph "Supporting Services"
+            MON2["Application Monitoring<br/>Prometheus + Grafana<br/>(Self-hosted)"]
+            SEC2["Security Layer<br/>Vault + Policies"]
         end
     end
     
     %% External Services
     subgraph "GCP Services"
-        DNS["Cloud DNS<br/>Domain Resolution"]
-        KMS["Cloud KMS<br/>Encryption Keys"]
-        SM["Secret Manager<br/>Backup Secrets"]
-        LOG["Cloud Logging<br/>Centralized Logs"]
-        MON["Cloud Monitoring<br/>Infrastructure Metrics"]
+        GCP["GCP Infrastructure<br/>VPC, Load Balancer,<br/>Audit Logging (BigQuery),<br/>Infrastructure Monitoring"]
     end
     
     %% CI/CD
     subgraph "CI/CD Pipeline"
-        GH["GitHub Actions<br/>Build & Deploy"]
-        GCR["Container Registry<br/>Image Storage"]
-        ARGO["ArgoCD<br/>GitOps Controller"]
+        CICD["GitHub Actions →<br/>Container Registry →<br/>ArgoCD"]
     end
     
-    %% Connections
-    HTTPS --> GATEWAY1
-    HTTP --> GATEWAY1
+    %% Core Connections
+    LB --> ISTIO1
+    LB -.-> ISTIO2
     
-    GATEWAY1 --> VS1
-    VS1 --> APP1
-    VS1 --> APP1_CANARY
-    VS1 --> DR1
+    ISTIO1 --> APP1
+    ISTIO2 --> APP2
     
-    APP1 --> SVC1
-    APP1_CANARY --> SVC1
-    HPA1 --> APP1
+    APP1 --> GCP
+    APP2 --> GCP
     
-    PROM --> APP1
-    PROM --> APP1_CANARY
-    GRAF --> PROM
-    ALERT --> PROM
+    CICD --> APP1
+    CICD --> APP2
     
-    VAULT1 --> APP1
-    VAULT1 --> APP1_CANARY
-    PSP1 --> APP1
-    PSP1 --> APP1_CANARY
-    NP_SEC1 --> SVC1
-    
-    VPC1 --> SUBNET1
-    SUBNET1 --> NAT1
-    
-    %% Cross-region connections
-    GATEWAY1 -.-> GATEWAY2
-    VS1 -.-> VS2
-    VAULT1 -.-> VAULT2
-    
-    %% External connections
-    APP1 --> DNS
-    APP2 --> DNS
-    APP1 --> KMS
-    APP2 --> KMS
-    VAULT1 --> SM
-    VAULT2 --> SM
-    
-    %% CI/CD connections
-    GH --> GCR
-    GCR --> APP1
-    GCR --> APP2
-    ARGO --> APP1
-    ARGO --> APP2
-    
-    %% Logging and monitoring
-    APP1 --> LOG
-    APP2 --> LOG
-    NP1 --> MON
-    NP2 --> MON
-    NP3 --> MON
-    NP4 --> MON
+    %% Cross-region failover
+    ISTIO1 -.-> ISTIO2
     
     style Users fill:#e1f5fe
     style LB fill:#f3e5f5
+    style ISTIO1 fill:#e3f2fd
+    style ISTIO2 fill:#e3f2fd
     style APP1 fill:#e8f5e8
     style APP2 fill:#e8f5e8
-    style APP1_CANARY fill:#fff3e0
-    style PROM fill:#fce4ec
-    style GRAF fill:#fce4ec
-    style VAULT1 fill:#ffebee
-    style VAULT2 fill:#ffebee
+    style MON fill:#fce4ec
+    style SEC fill:#ffebee
+    style GCP fill:#f0f8ff
+    style CICD fill:#fff8dc
 ```
 
 ## Architecture Components
@@ -179,16 +86,18 @@ graph TB
 - **Purpose**: Failover and disaster recovery
 
 ### Service Mesh (Istio)
-- **Traffic Management**: 80/20 canary split
-- **Security**: mTLS between services
-- **Observability**: Distributed tracing
-- **Resilience**: Circuit breakers and retries
+- **Traffic Management**: 80/20 canary split, header-based routing
+- **Security**: mTLS between services, authentication, authorization
+- **Observability**: Distributed tracing, metrics, logging
+- **Resilience**: Circuit breakers, retries, fault injection
+- **Cross-Region**: Multi-cluster service discovery and failover
 
-### Monitoring Stack
-- **Prometheus**: Metrics collection from all components
-- **Grafana**: Dashboards for visualization
-- **AlertManager**: Notification routing
-- **Custom Metrics**: Application-specific monitoring
+### Application Monitoring Stack
+- **Prometheus**: Self-hosted metrics collection from applications
+- **Grafana**: Self-hosted dashboards for visualization
+- **AlertManager**: Self-hosted notification routing
+- **Custom Metrics**: Application-specific monitoring (HTTP requests, response times)
+- **Infrastructure Monitoring**: GCP Cloud Monitoring for infrastructure alerts
 
 ### Security Layer
 - **HashiCorp Vault**: Secret management and rotation
@@ -252,7 +161,7 @@ graph TB
 - **Encryption at Rest**: All persistent data encrypted
 - **Encryption in Transit**: TLS for all communications
 - **Secret Management**: HashiCorp Vault integration
-- **Key Management**: Cloud KMS for encryption keys
+- **Key Management**: HashiCorp Vault for secret management
 
 ## Disaster Recovery
 
