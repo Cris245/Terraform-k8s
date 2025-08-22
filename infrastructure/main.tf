@@ -5,25 +5,12 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 4.0"
     }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.0"
-    }
-    helm = {
-      source  = "hashicorp/helm"
-      version = "~> 2.0"
-    }
   }
   # Uncomment for production use with GCS backend
   # backend "gcs" {
   #   bucket = "terraform-state-golang-ha"
   #   prefix = "terraform/state"
   # }
-}
-
-provider "google" {
-  project = var.project_id
-  region  = var.primary_region
 }
 
 # Enable required APIs
@@ -59,7 +46,7 @@ module "vpc" {
 module "gke_primary" {
   source = "./modules/gke"
   
-  cluster_name    = "golang-ha-primary"
+  cluster_name    = var.primary_cluster_name
   project_id      = var.project_id
   region          = var.primary_region
   network         = module.vpc.network_name
@@ -72,7 +59,7 @@ module "gke_primary" {
 module "gke_secondary" {
   source = "./modules/gke"
   
-  cluster_name    = "golang-ha-secondary"
+  cluster_name    = var.secondary_cluster_name
   project_id      = var.project_id
   region          = var.secondary_region
   network         = module.vpc.network_name
@@ -98,23 +85,79 @@ module "load_balancer" {
 # Monitoring Stack
 module "monitoring" {
   source = "./modules/monitoring"
-  
-  project_id = var.project_id
-  primary_cluster = module.gke_primary.cluster_name
+
+  project_id                 = var.project_id
+  primary_cluster            = module.gke_primary.cluster_name
   secondary_cluster = module.gke_secondary.cluster_name
-  
-  depends_on = [module.gke_primary, module.gke_secondary]
+
+  cluster_endpoint           = "https://${module.gke_primary.endpoint}"
+  cluster_ca_certificate     = module.gke_primary.cluster_ca_certificate
+  cluster_client_certificate = module.gke_primary.client_certificate
+  cluster_client_key         = module.gke_primary.client_key
+
+  providers = {
+    kubernetes = kubernetes.primary
+    helm       = helm.primary
+  }
+}
+
+# Note: Istio is already installed on both clusters
+# Skipping Istio installation to avoid conflicts with existing installation
+
+# Application deployment on primary cluster
+module "application_primary" {
+  source = "./modules/application"
+
+  project_id = var.project_id
+
+  cluster_endpoint        = "https://${module.gke_primary.endpoint}"
+  cluster_ca_certificate  = module.gke_primary.cluster_ca_certificate
+  cluster_client_certificate = module.gke_primary.client_certificate
+  cluster_client_key      = module.gke_primary.client_key
+  cluster_ready           = module.gke_primary
+
+  depends_on = [module.gke_primary]
+
+  providers = {
+    kubernetes = kubernetes.primary
+    helm       = helm.primary
+  }
+}
+
+# Application deployment on secondary cluster
+module "application_secondary" {
+  source = "./modules/application"
+
+  project_id = var.project_id
+
+  cluster_endpoint        = "https://${module.gke_secondary.endpoint}"
+  cluster_ca_certificate  = module.gke_secondary.cluster_ca_certificate
+  cluster_client_certificate = module.gke_secondary.client_certificate
+  cluster_client_key      = module.gke_secondary.client_key
+  cluster_ready           = module.gke_secondary
+
+  depends_on = [module.gke_secondary]
+
+  providers = {
+    kubernetes = kubernetes.secondary
+    helm       = helm.secondary
+  }
 }
 
 # ArgoCD for GitOps
 module "argocd" {
   source = "./modules/argocd"
-  
-  project_id        = var.project_id
-  primary_cluster   = module.gke_primary.cluster_name
+
+  project_id                 = var.project_id
+  primary_cluster            = module.gke_primary.cluster_name
   secondary_cluster = module.gke_secondary.cluster_name
   domain_name       = var.domain_name
-  
+
+  cluster_endpoint           = "https://${module.gke_primary.endpoint}"
+  cluster_ca_certificate     = module.gke_primary.cluster_ca_certificate
+  cluster_client_certificate = module.gke_primary.client_certificate
+  cluster_client_key         = module.gke_primary.client_key
+
   # ArgoCD configuration
   argocd_hostname     = "argocd.${var.domain_name}"
   git_repository_url  = var.argocd_git_repository_url
@@ -135,8 +178,11 @@ module "argocd" {
     managed-by  = "terraform"
     project     = "golang-ha-server"
   }
-  
-  depends_on = [module.gke_primary, module.gke_secondary]
+
+  providers = {
+    kubernetes = kubernetes.primary
+    helm       = helm.primary
+  }
 }
 
 

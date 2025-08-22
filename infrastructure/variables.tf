@@ -32,14 +32,14 @@ variable "node_pools" {
   }))
   default = {
     primary = {
-      machine_type = "e2-standard-2"
+      machine_type = "e2-standard-4"
       node_count   = 3
       disk_size_gb = 50
       disk_type    = "pd-standard"
       preemptible  = false
     }
     secondary = {
-      machine_type = "e2-standard-2"
+      machine_type = "e2-standard-4"
       node_count   = 2
       disk_size_gb = 50
       disk_type    = "pd-standard"
@@ -176,4 +176,16 @@ variable "enable_argocd" {
   description = "Enable ArgoCD for GitOps"
   type        = bool
   default     = true
+}
+
+variable "primary_cluster_name" {
+  description = "Name for the primary GKE cluster"
+  type        = string
+  default     = "golang-ha-primary"
+}
+
+variable "secondary_cluster_name" {
+  description = "Name for the secondary GKE cluster"
+  type        = string
+  default     = "golang-ha-secondary"
 }

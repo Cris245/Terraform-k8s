@@ -23,9 +23,38 @@ output "vpc_network" {
   value       = module.vpc.network_name
 }
 
+output "project_id" {
+  description = "GCP project ID"
+  value       = var.project_id
+}
+
 output "grafana_url" {
   description = "Grafana URL"
   value       = "http://localhost:3000"
+}
+
+# Istio is already installed - you can get the gateway IP with:
+# kubectl get svc istio-ingressgateway -n istio-system
+
+# Application outputs
+output "primary_application_namespace" {
+  description = "Primary cluster application namespace"
+  value       = module.application_primary.application_namespace
+}
+
+output "secondary_application_namespace" {
+  description = "Secondary cluster application namespace"
+  value       = module.application_secondary.application_namespace
+}
+
+output "primary_application_service" {
+  description = "Primary cluster application service"
+  value       = module.application_primary.application_service
+}
+
+output "secondary_application_service" {
+  description = "Secondary cluster application service"
+  value       = module.application_secondary.application_service
 }
 
 output "argocd_url" {

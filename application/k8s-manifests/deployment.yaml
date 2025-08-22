@@ -33,7 +33,7 @@ spec:
         fsGroup: 1001
       containers:
       - name: golang-app
-        image: gcr.io/PROJECT_ID/golang-ha-server:latest
+        image: gcr.io/${PROJECT_ID}/golang-ha-app:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -144,10 +144,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - golang-ha.example.com
+    - ${DOMAIN_NAME:-golang-ha.example.com}
     secretName: golang-app-tls
   rules:
-  - host: golang-ha.example.com
+  - host: ${DOMAIN_NAME:-golang-ha.example.com}
     http:
       paths:
       - path: /

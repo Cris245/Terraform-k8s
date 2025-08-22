@@ -42,13 +42,48 @@ This repository contains a comprehensive solution demonstrating enterprise-grade
 
 ### Prerequisites
 ```bash
+# Install required tools
+# 1. Google Cloud CLI
+curl https://sdk.cloud.google.com | bash
+exec -l $SHELL
+gcloud init
+
+# 2. Terraform
+brew install terraform  # macOS
+# or download from https://www.terraform.io/downloads.html
+
+# 3. kubectl
+gcloud components install kubectl
+
+# 4. Docker
+# Download from https://www.docker.com/products/docker-desktop
+
+# Verify installations
 gcloud --version  # >= 400.0.0
 terraform --version  # >= 1.0
 kubectl version
 docker --version
 ```
 
-### 1. Configure Project
+### 1. GCP Setup
+```bash
+# Create a new GCP project or use existing one
+gcloud projects create YOUR_PROJECT_ID --name="Golang HA Demo"
+gcloud config set project YOUR_PROJECT_ID
+
+# Enable required APIs
+gcloud services enable container.googleapis.com
+gcloud services enable compute.googleapis.com
+gcloud services enable monitoring.googleapis.com
+gcloud services enable logging.googleapis.com
+gcloud services enable secretmanager.googleapis.com
+gcloud services enable cloudkms.googleapis.com
+
+# Authenticate
+gcloud auth application-default login
+```
+
+### 2. Configure Project
 ```bash
 # Run the setup script to configure project ID and regions
 ./setup-project.sh
@@ -59,31 +94,56 @@ cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your GCP project ID and preferred regions
 ```
 
-### 2. Deploy Infrastructure
+### 3. Automated Deployment
 ```bash
+# Deploy everything with a single command
+./deploy.sh
+```
+
+This script will:
+- Check prerequisites
+- Detect GCP project ID
+- Build and push Docker image
+- Deploy infrastructure with Terraform
+- Deploy application and monitoring
+- Verify deployment
+- Display access information
+
+### 4. Manual Deployment (Alternative)
+```bash
+# Deploy infrastructure
 cd infrastructure
 terraform init
 terraform apply
-```
 
-### 3. Configure kubectl
-```bash
-# Replace YOUR_PROJECT_ID and regions with your actual values
-gcloud container clusters get-credentials golang-ha-primary --region YOUR_PRIMARY_REGION --project YOUR_PROJECT_ID
-gcloud container clusters get-credentials golang-ha-secondary --region YOUR_SECONDARY_REGION --project YOUR_PROJECT_ID
-```
+# Configure kubectl
+gcloud container clusters get-credentials golang-ha-primary --region europe-west1 --project YOUR_PROJECT_ID
+gcloud container clusters get-credentials golang-ha-secondary --region europe-west3 --project YOUR_PROJECT_ID
 
-### 4. Deploy Application
-```bash
+# Deploy application
 cd ../application
 kubectl apply -f k8s-manifests/deployment-simple.yaml
 kubectl apply -f istio-config/working-canary-vs.yaml
-
-# Deploy WAF configuration (optional)
-kubectl apply -f k8s-manifests/waf-config.yaml
 ```
 
-### 5. Test Canary Deployment
+### 5. Test Deployment
+```bash
+# Run comprehensive test suite
+./run-all-tests.sh
+```
+
+This will test:
+- **Infrastructure validation** - Terraform, GKE clusters, networking
+- **CI/CD pipeline validation** - GitHub Actions, Docker builds, canary deployments
+- **Advanced CI/CD testing** - Rollback strategies, WAF, Vault, custom metrics
+- **Application deployment** - Kubernetes resources, health checks, services
+- **Monitoring stack** - Prometheus, Grafana, AlertManager
+- **Security configuration** - Pod security, network policies, audit logging
+- **High availability** - Multi-region deployment, auto-scaling
+- **Load testing** - Performance, auto-scaling, response times
+- **Disaster recovery** - RTO/RPO compliance, failover capabilities
+
+### 6. Individual Testing (Alternative)
 ```bash
 # Get Gateway IP
 GATEWAY_IP=$(kubectl get service -n istio-system istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
@@ -93,7 +153,7 @@ curl http://$GATEWAY_IP/health
 curl -H "canary: true" http://$GATEWAY_IP/health
 curl https://$GATEWAY_IP/health -k
 
-# Run comprehensive tests
+# Run legacy tests
 ./application/scripts/test-working-canary.sh $GATEWAY_IP
 ```
 
@@ -165,7 +225,37 @@ curl https://$GATEWAY_IP/health -k
 
 ## Testing
 
-### Infrastructure Testing
+### Comprehensive Test Suite
+
+We provide a complete testing framework that validates all aspects of the deployment:
+
+#### 1. Master Test Runner
+```bash
+# Run all test suites in sequence
+./run-all-tests.sh
+```
+
+#### 2. Individual Test Suites
+
+**Deployment Validation:**
+```bash
+# Validates infrastructure, application, monitoring, security, and HA
+./test-deployment.sh
+```
+
+**Load Testing:**
+```bash
+# Tests performance, auto-scaling, and response times
+./load-test.sh
+```
+
+**Disaster Recovery:**
+```bash
+# Tests failover capabilities and RTO/RPO compliance
+./disaster-recovery-test.sh
+```
+
+#### 3. Legacy Infrastructure Testing
 ```bash
 # Validate Terraform configuration
 ./test-infrastructure.sh validate
@@ -177,7 +267,7 @@ curl https://$GATEWAY_IP/health -k
 ./test-infrastructure.sh full
 ```
 
-### Application Testing
+#### 4. Application Testing
 ```bash
 # Test application health
 kubectl get pods -A
@@ -188,7 +278,7 @@ cd application/scripts
 ./load-test.sh
 ```
 
-### Canary Deployment Validation
+#### 5. Canary Deployment Validation
 ```bash
 # Test traffic distribution
 ./application/scripts/test-working-canary.sh
@@ -230,8 +320,66 @@ export SECONDARY_REGION="europe-west3"
 - **Preemptible Nodes**: Cost reduction for non-critical workloads
 - **Resource Requests**: Right-sized containers
 
+## Cleanup
+
+### Automated Cleanup
+```bash
+# Destroy all resources with a single command
+./destroy.sh
+```
+
+This script will:
+- Confirm destruction
+- Destroy all Terraform resources
+- Clean up local files
+- Remove all GCP resources
+
+### Manual Cleanup
+```bash
+cd infrastructure
+terraform destroy
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**1. GCP Authentication Issues**
+```bash
+# Re-authenticate with GCP
+gcloud auth login
+gcloud auth application-default login
+```
+
+**2. Terraform State Issues**
+```bash
+# Re-initialize Terraform
+cd infrastructure
+terraform init -reconfigure
+```
+
+**3. Docker Build Issues**
+```bash
+# Clean Docker cache
+docker system prune -a
+```
+
+**4. Kubernetes Connection Issues**
+```bash
+# Get fresh cluster credentials
+gcloud container clusters get-credentials golang-ha-primary --region europe-west1 --project YOUR_PROJECT_ID
+gcloud container clusters get-credentials golang-ha-secondary --region europe-west3 --project YOUR_PROJECT_ID
+```
+
+### Getting Help
+
+- Check the logs: `kubectl logs -n golang-app deployment/golang-app`
+- Verify cluster status: `gcloud container clusters list`
+- Review Terraform state: `terraform show`
+
 ## Documentation
 
 - [Architecture Diagrams](ARCHITECTURE_DIAGRAM.md) - System architecture and data flow
 - [Technical Decisions](TECHNICAL_DECISIONS.md) - Engineering choices and rationale
 - [Disaster Recovery Plan](DISASTER_RECOVERY_PLAN.md) - DR procedures with RTO/RPO definitions
+- [Interview Summary](INTERVIEW_SUMMARY.md) - Simplified overview for interviews

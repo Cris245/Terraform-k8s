@@ -86,4 +86,11 @@ resource "google_container_node_pool" "primary_pools" {
       }
     }
   }
+
+  # Avoid unnecessary PATCH calls when nothing substantive changed
+  lifecycle {
+    ignore_changes = [
+      node_config,
+    ]
+  }
 }

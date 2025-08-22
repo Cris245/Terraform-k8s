@@ -35,7 +35,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: golang-app-canary
-        image: gcr.io/YOUR_PROJECT_ID/golang-ha-app:latest
+        image: gcr.io/${PROJECT_ID}/golang-ha-app:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

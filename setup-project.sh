@@ -5,12 +5,12 @@
 
 set -e
 
-echo "🚀 Golang HA Server Setup"
-echo "========================="
+echo "Golang HA Server Setup"
+echo "======================"
 
 # Check if gcloud is configured
 if ! command -v gcloud &> /dev/null; then
-    echo "❌ gcloud CLI not found. Please install it first:"
+    echo "ERROR: gcloud CLI not found. Please install it first:"
     echo "   https://cloud.google.com/sdk/docs/install"
     exit 1
 fi
@@ -19,13 +19,13 @@ fi
 CURRENT_PROJECT=$(gcloud config get-value project 2>/dev/null || echo "")
 
 if [ -z "$CURRENT_PROJECT" ]; then
-    echo "❌ No GCP project configured. Please run:"
+    echo "ERROR: No GCP project configured. Please run:"
     echo "   gcloud auth login"
     echo "   gcloud config set project YOUR_PROJECT_ID"
     exit 1
 fi
 
-echo "✅ Current GCP project: $CURRENT_PROJECT"
+echo "Current GCP project: $CURRENT_PROJECT"
 echo ""
 
 # Confirm project
@@ -37,7 +37,7 @@ else
 fi
 
 echo ""
-echo "🔧 Configuring project files with: $PROJECT_ID"
+echo "Configuring project files with: $PROJECT_ID"
 
 # Ask about regions
 echo ""
@@ -57,7 +57,7 @@ if [[ $change_regions == [yY] || $change_regions == [yY][eE][sS] ]]; then
     PRIMARY_REGION=${PRIMARY_REGION:-europe-west1}
     SECONDARY_REGION=${SECONDARY_REGION:-europe-west3}
     
-    echo "✅ Will use regions: $PRIMARY_REGION (primary), $SECONDARY_REGION (secondary)"
+    echo "Will use regions: $PRIMARY_REGION (primary), $SECONDARY_REGION (secondary)"
 else
     PRIMARY_REGION="europe-west1"
     SECONDARY_REGION="europe-west3"
@@ -68,29 +68,29 @@ if [ -f "infrastructure/terraform.tfvars" ]; then
     sed -i.bak "s/YOUR_PROJECT_ID/$PROJECT_ID/g" infrastructure/terraform.tfvars
     sed -i.bak "s/europe-west1/$PRIMARY_REGION/g" infrastructure/terraform.tfvars
     sed -i.bak "s/europe-west3/$SECONDARY_REGION/g" infrastructure/terraform.tfvars
-    echo "✅ Updated infrastructure/terraform.tfvars"
+    echo "Updated infrastructure/terraform.tfvars"
 fi
 
 # Update Kubernetes manifests
 find application/k8s-manifests/ -name "*.yaml" -exec sed -i.bak "s/YOUR_PROJECT_ID/$PROJECT_ID/g" {} \;
-echo "✅ Updated Kubernetes manifests"
+echo "Updated Kubernetes manifests"
 
 # Update test scripts
 find . -name "*.sh" -exec sed -i.bak "s/YOUR_PROJECT_ID/$PROJECT_ID/g" {} \;
-echo "✅ Updated test scripts"
+echo "Updated test scripts"
 
 # Clean up backup files
 find . -name "*.bak" -delete
 
 echo ""
-echo "🎯 Next Steps:"
+echo "Next Steps:"
 echo "1. Review and customize infrastructure/terraform.tfvars"
-echo "2. Run: cd infrastructure && terraform init && terraform apply"
+echo "2. Run: ./deploy.sh"
 echo "3. Follow the README.md for complete deployment instructions"
 echo ""
-echo "📚 Documentation:"
+echo "Documentation:"
 echo "- README.md - Quick start guide"
 echo "- TECHNICAL_DECISIONS.md - Architecture rationale"
 echo "- ARCHITECTURE_DIAGRAM.md - System diagrams"
 echo ""
-echo "✅ Setup complete! Your project is ready for deployment."
+echo "Setup complete! Your project is ready for deployment."

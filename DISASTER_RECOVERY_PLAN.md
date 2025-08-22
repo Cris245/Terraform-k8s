@@ -304,6 +304,41 @@ kubectl get secrets --all-namespaces -o yaml | gpg --encrypt > secrets-backup-$(
 - **DNS Provider**: For DNS-related issues
 - **CDN Provider**: For edge-related issues
 
+## Automated Testing
+
+### Disaster Recovery Test Script
+We provide an automated disaster recovery testing script that validates our RTO/RPO compliance:
+
+```bash
+# Run comprehensive disaster recovery testing
+./disaster-recovery-test.sh
+```
+
+This script tests:
+- Pre-disaster baseline validation
+- Secondary cluster readiness
+- Data replication verification
+- Load balancer failover
+- Simulated disaster recovery
+- RTO/RPO compliance measurement
+- Cross-region connectivity
+- Backup and restore validation
+- Monitoring during disaster
+- Security during failover
+
+### Test Execution
+```bash
+# Run all tests including disaster recovery
+./run-all-tests.sh
+
+# Run only disaster recovery tests
+./disaster-recovery-test.sh
+
+# Run specific test categories
+./test-deployment.sh    # Infrastructure validation
+./load-test.sh          # Performance testing
+```
+
 ## Success Criteria
 
 ### Recovery Objectives Met
@@ -317,5 +352,11 @@ kubectl get secrets --all-namespaces -o yaml | gpg --encrypt > secrets-backup-$(
 - **Response Time**: Team engagement within 10 minutes
 - **Communication**: Stakeholder notification within established timelines
 - **Learning**: Actionable improvements identified and implemented
+
+### Automated Testing Success
+- **Test Coverage**: All disaster scenarios covered
+- **RTO Validation**: Measured recovery time within targets
+- **RPO Validation**: Data loss measurement within limits
+- **Automation**: 100% automated testing capability
 
 This disaster recovery plan ensures business continuity and minimizes the impact of potential failures on the Golang HA server infrastructure.

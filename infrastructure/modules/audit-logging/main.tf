@@ -1,93 +1,32 @@
 # Audit Logging Configuration for GCP
 # This module sets up comprehensive audit logging for the Golang HA infrastructure
 
-# Enable audit logging for the project
-resource "google_project_iam_audit_config" "audit_config" {
-  project = var.project_id
-  
-  # Kubernetes Engine audit logging
-  audit_log_config {
-    service = "container.googleapis.com"
-    audit_log_configs {
-      log_type = "ADMIN_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_WRITE"
-    }
-  }
+# Enable audit logging for key GCP services
+locals {
+  audit_services = [
+    "container.googleapis.com",
+    "compute.googleapis.com",
+    "iam.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "secretmanager.googleapis.com",
+    "cloudkms.googleapis.com"
+  ]
+}
 
-  # Compute Engine audit logging
-  audit_log_config {
-    service = "compute.googleapis.com"
-    audit_log_configs {
-      log_type = "ADMIN_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_WRITE"
-    }
-  }
+resource "google_project_iam_audit_config" "service_audit" {
+  for_each = toset(local.audit_services)
+  project  = var.project_id
+  service  = each.value
 
-  # IAM audit logging
   audit_log_config {
-    service = "iam.googleapis.com"
-    audit_log_configs {
-      log_type = "ADMIN_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_WRITE"
-    }
+    log_type = "ADMIN_READ"
   }
-
-  # Cloud Resource Manager audit logging
   audit_log_config {
-    service = "cloudresourcemanager.googleapis.com"
-    audit_log_configs {
-      log_type = "ADMIN_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_WRITE"
-    }
+    log_type = "DATA_READ"
+    exempted_members = each.value == "secretmanager.googleapis.com" ? var.secret_exempted_members : null
   }
-
-  # Secret Manager audit logging
   audit_log_config {
-    service = "secretmanager.googleapis.com"
-    audit_log_configs {
-      log_type = "ADMIN_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_READ"
-      exempted_members = var.secret_exempted_members
-    }
-    audit_log_configs {
-      log_type = "DATA_WRITE"
-    }
-  }
-
-  # Cloud KMS audit logging
-  audit_log_config {
-    service = "cloudkms.googleapis.com"
-    audit_log_configs {
-      log_type = "ADMIN_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_READ"
-    }
-    audit_log_configs {
-      log_type = "DATA_WRITE"
-    }
+    log_type = "DATA_WRITE"
   }
 }
 
@@ -132,15 +71,7 @@ resource "google_bigquery_dataset" "audit_dataset" {
     managed-by  = "terraform"
   }
 
-  access {
-    role          = "OWNER"
-    user_by_email = var.audit_dataset_owner
-  }
-
-  access {
-    role   = "READER"
-    domain = var.organization_domain
-  }
+  # Default access uses creator's identity; explicit access blocks omitted for simplicity
 }
 
 # Grant BigQuery Data Editor role to the sink writer
@@ -234,15 +165,12 @@ resource "google_logging_metric" "failed_authentication" {
   EOT
 
   metric_descriptor {
-    metric_kind = "GAUGE"
+    metric_kind = "DELTA"
     value_type  = "INT64"
     display_name = "Failed Authentication Attempts"
   }
 
-  label_extractors = {
-    "user" = "EXTRACT(protoPayload.authenticationInfo.principalEmail)"
-    "service" = "EXTRACT(protoPayload.serviceName)"
-  }
+  # No label extractors to avoid descriptor mismatch
 }
 
 resource "google_logging_metric" "privilege_escalation" {
@@ -257,15 +185,12 @@ resource "google_logging_metric" "privilege_escalation" {
   EOT
 
   metric_descriptor {
-    metric_kind = "GAUGE"
+    metric_kind = "DELTA"
     value_type  = "INT64"
     display_name = "Privilege Escalation Events"
   }
 
-  label_extractors = {
-    "user" = "EXTRACT(protoPayload.authenticationInfo.principalEmail)"
-    "method" = "EXTRACT(protoPayload.methodName)"
-  }
+  # No label extractors to avoid descriptor mismatch
 }
 
 resource "google_logging_metric" "data_access_anomaly" {
@@ -278,15 +203,12 @@ resource "google_logging_metric" "data_access_anomaly" {
   EOT
 
   metric_descriptor {
-    metric_kind = "GAUGE"
+    metric_kind = "DELTA"
     value_type  = "INT64"
     display_name = "Suspicious Data Access"
   }
 
-  label_extractors = {
-    "user" = "EXTRACT(protoPayload.authenticationInfo.principalEmail)"
-    "resource" = "EXTRACT(protoPayload.resourceName)"
-  }
+  # No label extractors to avoid descriptor mismatch
 }
 
 resource "google_logging_metric" "high_privilege_operations" {
@@ -303,16 +225,12 @@ resource "google_logging_metric" "high_privilege_operations" {
   EOT
 
   metric_descriptor {
-    metric_kind = "GAUGE"
+    metric_kind = "DELTA"
     value_type  = "INT64"
     display_name = "High Privilege Operations"
   }
 
-  label_extractors = {
-    "user" = "EXTRACT(protoPayload.authenticationInfo.principalEmail)"
-    "operation" = "EXTRACT(protoPayload.methodName)"
-    "service" = "EXTRACT(protoPayload.serviceName)"
-  }
+  # No label extractors to avoid descriptor mismatch
 }
 
 # Alerting policies for security events
@@ -342,12 +260,7 @@ resource "google_monitoring_alert_policy" "failed_auth_alert" {
     mime_type = "text/markdown"
   }
 
-  dynamic "notification_channels" {
-    for_each = var.notification_channels
-    content {
-      notification_channels = [notification_channels.value]
-    }
-  }
+  notification_channels = var.notification_channels
 }
 
 resource "google_monitoring_alert_policy" "privilege_escalation_alert" {
@@ -376,12 +289,7 @@ resource "google_monitoring_alert_policy" "privilege_escalation_alert" {
     mime_type = "text/markdown"
   }
 
-  dynamic "notification_channels" {
-    for_each = var.notification_channels
-    content {
-      notification_channels = [notification_channels.value]
-    }
-  }
+  notification_channels = var.notification_channels
 }
 
 # Dashboard for audit logging
@@ -390,6 +298,7 @@ resource "google_monitoring_dashboard" "audit_dashboard" {
   dashboard_json = jsonencode({
     displayName = "${var.project_name} - Security Audit Dashboard"
     mosaicLayout = {
+      columns = 24
       tiles = [
         {
           width  = 6

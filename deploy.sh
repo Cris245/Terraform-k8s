@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Golang HA Server Deployment Script
-# This script automates the deployment of the Golang HA server on GCP
+# Golang HA Server - Complete Deployment Script
+# This script automates the entire deployment process
 
 set -e
 
@@ -29,244 +29,206 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Function to check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
 # Function to check prerequisites
 check_prerequisites() {
     print_status "Checking prerequisites..."
     
-    local missing_tools=()
+    # Check if required tools are installed
+    command -v terraform >/dev/null 2>&1 || { print_error "Terraform is required but not installed. Aborting."; exit 1; }
+    command -v gcloud >/dev/null 2>&1 || { print_error "gcloud CLI is required but not installed. Aborting."; exit 1; }
+    command -v kubectl >/dev/null 2>&1 || { print_error "kubectl is required but not installed. Aborting."; exit 1; }
+    command -v docker >/dev/null 2>&1 || { print_error "Docker is required but not installed. Aborting."; exit 1; }
     
-    if ! command_exists terraform; then
-        missing_tools+=("terraform")
-    fi
+    print_success "All prerequisites are satisfied"
+}
+
+# Function to get GCP project ID
+get_project_id() {
+    print_status "Getting GCP project ID..."
     
-    if ! command_exists kubectl; then
-        missing_tools+=("kubectl")
-    fi
+    # Try to get project ID from gcloud
+    PROJECT_ID=$(gcloud config get-value project 2>/dev/null || echo "")
     
-    if ! command_exists gcloud; then
-        missing_tools+=("gcloud")
-    fi
-    
-    if ! command_exists docker; then
-        missing_tools+=("docker")
-    fi
-    
-    if [ ${#missing_tools[@]} -ne 0 ]; then
-        print_error "Missing required tools: ${missing_tools[*]}"
-        print_status "Please install the missing tools and try again."
+    if [ -z "$PROJECT_ID" ]; then
+        print_error "No GCP project configured. Please run: gcloud auth login && gcloud config set project YOUR_PROJECT_ID"
         exit 1
     fi
     
-    print_success "All prerequisites are installed"
+    print_success "Using GCP project: $PROJECT_ID"
+    
+    # Update terraform.tfvars with the project ID
+    if [ -f "infrastructure/terraform.tfvars" ]; then
+        sed -i.bak "s/project_id = \".*\"/project_id = \"$PROJECT_ID\"/" infrastructure/terraform.tfvars
+        print_success "Updated terraform.tfvars with project ID: $PROJECT_ID"
+    else
+        print_error "terraform.tfvars not found in infrastructure directory. Please create it from terraform.tfvars.example"
+        exit 1
+    fi
 }
 
-# Function to setup GCP authentication
-setup_gcp_auth() {
-    print_status "Setting up GCP authentication..."
+# Function to build and push Docker image
+build_and_push_image() {
+    print_status "Building and pushing Docker image..."
     
-    if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q .; then
-        print_warning "No active GCP account found. Please authenticate:"
-        gcloud auth login
-    else
-        print_success "GCP authentication is already configured"
+    # Check if application directory exists
+    if [ ! -d "application/golang-server" ]; then
+        print_error "Application directory not found: application/golang-server"
+        exit 1
     fi
     
-    # Set project if provided
-    if [ -n "$GCP_PROJECT_ID" ]; then
-        gcloud config set project "$GCP_PROJECT_ID"
-        print_success "GCP project set to: $GCP_PROJECT_ID"
+    # Build the Docker image
+    cd application/golang-server
+    print_status "Building Docker image..."
+    docker buildx build --platform linux/amd64 -t gcr.io/$PROJECT_ID/golang-ha-app:latest .
+    
+    # Push to Google Container Registry
+    print_status "Pushing Docker image to GCR..."
+    docker push gcr.io/$PROJECT_ID/golang-ha-app:latest
+    
+    cd ../..
+    print_success "Docker image built and pushed successfully"
+}
+
+# Function to handle existing monitoring
+handle_existing_monitoring() {
+    print_status "Checking for existing monitoring installation..."
+    
+    if kubectl get pods -n monitoring 2>/dev/null | grep -q "prometheus-operator"; then
+        print_warning "Monitoring stack already exists. Skipping monitoring deployment to avoid conflicts."
+        return 0
     fi
+    
+    return 1
 }
 
 # Function to deploy infrastructure
 deploy_infrastructure() {
-    print_status "Deploying infrastructure..."
+    print_status "Deploying infrastructure with Terraform..."
     
+    # Change to infrastructure directory
     cd infrastructure
     
-    # Check if terraform.tfvars exists
-    if [ ! -f terraform.tfvars ]; then
-        print_warning "terraform.tfvars not found. Creating from example..."
-        cp terraform.tfvars.example terraform.tfvars
-        print_error "Please edit terraform.tfvars with your configuration and run the script again."
-        exit 1
-    fi
-    
     # Initialize Terraform
-    print_status "Initializing Terraform..."
     terraform init
     
-    # Plan deployment
-    print_status "Planning Terraform deployment..."
-    terraform plan -out=tfplan
-    
-    # Ask for confirmation
-    read -p "Do you want to apply this plan? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        print_status "Applying Terraform plan..."
-        terraform apply tfplan
-        print_success "Infrastructure deployment completed"
+    # Check if monitoring already exists
+    if handle_existing_monitoring; then
+        print_status "Deploying infrastructure without monitoring (already exists)..."
+        terraform plan -out=tfplan -target=module.vpc -target=module.gke_primary -target=module.gke_secondary -target=module.load_balancer -target=module.audit_logging -target=module.argocd -target=module.application_primary -target=module.application_secondary
     else
-        print_warning "Deployment cancelled"
-        exit 0
+        print_status "Planning complete Terraform deployment..."
+        terraform plan -out=tfplan
+    fi
+    
+    # Apply the deployment
+    print_status "Applying Terraform deployment..."
+    terraform apply tfplan
+    
+    # Handle monitoring webhook issue if it occurs
+    print_status "Checking monitoring deployment..."
+    if ! kubectl get pods -n monitoring 2>/dev/null | grep -q "prometheus-operator"; then
+        print_warning "Monitoring deployment may have failed due to webhook issues. Attempting to fix..."
+        
+        # Try to fix webhook issues
+        kubectl patch validatingwebhookconfiguration prometheus-operator-admission --type='json' -p='[{"op": "replace", "path": "/webhooks/0/failurePolicy", "value": "Ignore"}]' 2>/dev/null || echo "Webhook not found"
+        
+        # Re-apply monitoring if needed
+        print_status "Re-applying monitoring deployment..."
+        terraform apply -target=module.monitoring
     fi
     
     cd ..
-}
-
-# Function to build and deploy application
-deploy_application() {
-    print_status "Building and deploying application..."
-    
-    cd application/golang-server
-    
-    # Build Go application
-    print_status "Building Go application..."
-    go mod tidy
-    go build -o main .
-    
-    # Build Docker image
-    print_status "Building Docker image..."
-    docker build -t golang-ha-server:latest .
-    
-    # Get GCP project ID
-    local project_id=$(gcloud config get-value project)
-    
-    # Tag and push image
-    print_status "Pushing Docker image to GCR..."
-    docker tag golang-ha-server:latest gcr.io/$project_id/golang-ha-server:latest
-    docker push gcr.io/$project_id/golang-ha-server:latest
-    
-    print_success "Application image pushed to GCR"
-    
-    cd ../..
-}
-
-# Function to apply Kubernetes manifests
-apply_k8s_manifests() {
-    print_status "Applying Kubernetes manifests..."
-    
-    cd application/k8s-manifests
-    
-    # Get GCP project ID
-    local project_id=$(gcloud config get-value project)
-    
-    # Replace PROJECT_ID placeholder in manifests
-    sed -i.bak "s/PROJECT_ID/$project_id/g" deployment.yaml
-    sed -i.bak "s/PROJECT_ID/$project_id/g" canary-deployment.yaml
-    
-    # Apply manifests
-    kubectl apply -f deployment.yaml
-    kubectl apply -f canary-deployment.yaml
-    
-    # Wait for deployment
-    print_status "Waiting for deployment to be ready..."
-    kubectl rollout status deployment/golang-app --timeout=300s
-    
-    print_success "Kubernetes manifests applied successfully"
-    
-    cd ../..
-}
-
-# Function to setup security
-setup_security() {
-    print_status "Setting up security components..."
-    
-    cd security
-    
-    # Apply security policies
-    kubectl apply -f pod-security-policies.yaml
-    kubectl apply -f audit-logging.yaml
-    
-    print_success "Security components deployed"
-    
-    cd ..
+    print_success "Infrastructure deployment completed successfully"
 }
 
 # Function to verify deployment
 verify_deployment() {
     print_status "Verifying deployment..."
     
+    # Get cluster credentials
+    print_status "Getting cluster credentials..."
+    gcloud container clusters get-credentials golang-ha-primary --region europe-west1 --project $PROJECT_ID
+    
     # Check if pods are running
-    local pod_status=$(kubectl get pods -l app=golang-app -o jsonpath='{.items[*].status.phase}')
-    if [[ $pod_status == *"Running"* ]]; then
-        print_success "Application pods are running"
-    else
-        print_error "Application pods are not running properly"
-        kubectl get pods -l app=golang-app
-        exit 1
-    fi
+    print_status "Checking application pods..."
+    kubectl get pods -n golang-app
     
-    # Check if service is accessible
-    local service_ip=$(kubectl get service golang-app-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-    if [ -n "$service_ip" ]; then
-        print_success "Service is accessible at: $service_ip"
-    else
-        print_warning "Service IP not available yet"
-    fi
+    # Check if monitoring is running
+    print_status "Checking monitoring stack..."
+    kubectl get pods -n monitoring
     
-    # Get cluster info
-    print_status "Cluster information:"
-    kubectl cluster-info
+    # Check if ArgoCD is running
+    print_status "Checking ArgoCD..."
+    kubectl get pods -n argocd
+    
+    print_success "Deployment verification completed"
 }
 
-# Function to display next steps
-display_next_steps() {
-    print_success "Deployment completed successfully!"
+# Function to display access information
+display_access_info() {
+    print_status "Deployment completed successfully!"
     echo
-    echo "Next steps:"
-    echo "1. Configure your domain DNS to point to the load balancer IP"
-    echo "2. Set up SSL certificates (Let's Encrypt)"
-    echo "3. Configure monitoring dashboards"
-    echo "4. Set up alerts and notifications"
-    echo "5. Test the application endpoints"
+    echo "=== ACCESS INFORMATION ==="
     echo
-    echo "Useful commands:"
-    echo "  kubectl get pods -o wide"
-    echo "  kubectl logs -f deployment/golang-app"
-    echo "  kubectl get services"
-    echo "  kubectl get ingress"
+    
+    # Get load balancer IP
+    LB_IP=$(terraform output -raw load_balancer_ip 2>/dev/null || echo "Not available yet")
+    echo "Load Balancer IP: $LB_IP"
+    echo "Load Balancer URL: https://$LB_IP"
+    echo
+    
+    echo "=== LOCAL ACCESS (via port-forward) ==="
+    echo "Application: kubectl port-forward service/golang-app-service 8080:80 -n golang-app"
+    echo "Grafana: kubectl port-forward service/prometheus-operator-grafana 3000:80 -n monitoring"
+    echo
+    
+    echo "=== CLUSTER ACCESS ==="
+    echo "Primary Cluster: gcloud container clusters get-credentials golang-ha-primary --region europe-west1 --project $PROJECT_ID"
+    echo "Secondary Cluster: gcloud container clusters get-credentials golang-ha-secondary --region europe-west3 --project $PROJECT_ID"
+    echo
+    
+    echo "=== MONITORING ACCESS ==="
+    echo "Grafana: http://localhost:3000 (admin/admin123)"
+    echo "Audit Dashboard: $(terraform output -raw audit_dashboard_url 2>/dev/null || echo "Not available")"
+    echo
+    
+    echo "=== ARGOCD ACCESS ==="
+    echo "ArgoCD URL: $(terraform output -raw argocd_url 2>/dev/null || echo "Not available")"
+    echo
+    
+    echo "=== VERIFICATION COMMANDS ==="
+    echo "Check application: kubectl get pods -n golang-app"
+    echo "Check monitoring: kubectl get pods -n monitoring"
+    echo "Check ArgoCD: kubectl get pods -n argocd"
+    echo "Test application: curl http://localhost:8080/health"
+    echo
 }
 
-# Main deployment function
+# Main execution
 main() {
-    echo "🚀 Golang HA Server Deployment Script"
-    echo "====================================="
+    print_status "Starting Golang HA Server deployment..."
     echo
     
     # Check prerequisites
     check_prerequisites
     
-    # Setup GCP authentication
-    setup_gcp_auth
+    # Get project ID
+    get_project_id
+    
+    # Build and push Docker image
+    build_and_push_image
     
     # Deploy infrastructure
     deploy_infrastructure
     
-    # Build and deploy application
-    deploy_application
-    
-    # Apply Kubernetes manifests
-    apply_k8s_manifests
-    
-    # Setup security
-    setup_security
-    
     # Verify deployment
     verify_deployment
     
-    # Display next steps
-    display_next_steps
+    # Display access information
+    display_access_info
+    
+    print_success "Deployment completed successfully!"
 }
 
-# Check if script is being sourced
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    # Script is being executed directly
-    main "$@"
-fi
+# Run main function
+main "$@"

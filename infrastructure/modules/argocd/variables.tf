@@ -229,3 +229,26 @@ variable "labels" {
     managed-by = "terraform"
   }
 }
+
+variable "cluster_client_key" {
+  description = "Kubernetes cluster client key"
+  type        = string
+  sensitive   = true
+}
+
+variable "cluster_endpoint" {
+  description = "Kubernetes cluster endpoint"
+  type        = string
+}
+
+variable "cluster_ca_certificate" {
+  description = "Kubernetes cluster CA certificate"
+  type        = string
+  sensitive   = true
+}
+
+variable "cluster_client_certificate" {
+  description = "Kubernetes cluster client certificate"
+  type        = string
+  sensitive   = true
+}

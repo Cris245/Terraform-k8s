@@ -75,14 +75,14 @@ func appHandler(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Golang High Availability Server</h1>
+        <h1>Golang High Availability Server</h1>
         <div class="info">
             <h2>Server Information</h2>
             <div class="metric">
                 <strong>Timestamp:</strong> %s
             </div>
             <div class="metric">
-                <strong>Status:</strong> <span class="status">✅ Healthy</span>
+                <strong>Status:</strong> <span class="status">Healthy</span>
             </div>
             <div class="metric">
                 <strong>Version:</strong> 1.0.0
@@ -157,9 +157,9 @@ func getEnv(key, defaultValue string) string {
 func main() {
 	port := getEnv("PORT", "8080")
 
-	log.Printf("🚀 Starting Golang HA Server on port %s", port)
-	log.Printf("📊 Environment: %s", getEnv("ENVIRONMENT", "production"))
-	log.Printf("🏠 Hostname: %s", getEnv("HOSTNAME", "unknown"))
+	log.Printf("Starting Golang HA Server on port %s", port)
+	log.Printf("Environment: %s", getEnv("ENVIRONMENT", "production"))
+	log.Printf("Hostname: %s", getEnv("HOSTNAME", "unknown"))
 
 	// Register handlers
 	http.HandleFunc("/", appHandler)
@@ -167,12 +167,12 @@ func main() {
 	http.HandleFunc("/metrics", metricsHandler)
 
 	// Start server
-	log.Printf("✅ Server started, serving on port %s", port)
-	log.Printf("📈 Metrics available at http://localhost:%s/metrics", port)
-	log.Printf("❤️  Health check available at http://localhost:%s/health", port)
+	log.Printf("Server started, serving on port %s", port)
+	log.Printf("Metrics available at http://localhost:%s/metrics", port)
+	log.Printf("Health check available at http://localhost:%s/health", port)
 
 	err := http.ListenAndServe(":"+port, nil)
 	if err != nil {
-		log.Fatal("❌ Server failed to start: ", err.Error())
+		log.Fatal("Server failed to start: ", err.Error())
 	}
 }
