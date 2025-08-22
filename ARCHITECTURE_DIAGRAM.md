@@ -5,97 +5,97 @@
 ```mermaid
 graph TB
     %% External Users
-    Users[External Users] --> LB[Istio Gateway<br/>Load Balancer]
+    Users["External Users"] --> LB["Istio Gateway<br/>Load Balancer"]
     
     %% Load Balancer Layer
-    LB --> HTTPS[HTTPS (443)<br/>SSL Certificate]
-    LB --> HTTP[HTTP (80)<br/>Auto-redirect to HTTPS]
+    LB --> HTTPS["HTTPS (443)<br/>SSL Certificate"]
+    LB --> HTTP["HTTP (80)<br/>Auto-redirect to HTTPS"]
     
     %% Primary Region
     subgraph "Primary Region"
         subgraph "GKE Primary Cluster"
-            NP1[Node Pool 1<br/>3 nodes<br/>e2-standard-2]
-            NP2[Node Pool 2<br/>2 nodes<br/>e2-standard-2<br/>Spot instances]
+            NP1["Node Pool 1<br/>3 nodes<br/>e2-standard-2"]
+            NP2["Node Pool 2<br/>2 nodes<br/>e2-standard-2<br/>Spot instances"]
         end
         
         subgraph "Monitoring Stack"
-            PROM[Prometheus<br/>Metrics Collection]
-            GRAF[Grafana<br/>Dashboards]
-            ALERT[AlertManager<br/>Notifications]
+            PROM["Prometheus<br/>Metrics Collection"]
+            GRAF["Grafana<br/>Dashboards"]
+            ALERT["AlertManager<br/>Notifications"]
         end
         
         subgraph "Application Layer"
-            APP1[Golang App<br/>Deployment]
-            SVC1[Service<br/>ClusterIP]
-            HPA1[HPA<br/>Auto-scaling]
-            APP1_CANARY[Golang App Canary<br/>Single Replica]
+            APP1["Golang App<br/>Deployment"]
+            SVC1["Service<br/>ClusterIP"]
+            HPA1["HPA<br/>Auto-scaling"]
+            APP1_CANARY["Golang App Canary<br/>Single Replica"]
         end
         
         subgraph "Istio Service Mesh"
-            GATEWAY1[Istio Gateway<br/>Traffic Entry]
-            VS1[VirtualService<br/>80/20 Split]
-            DR1[DestinationRule<br/>Load Balancing]
+            GATEWAY1["Istio Gateway<br/>Traffic Entry"]
+            VS1["VirtualService<br/>80/20 Split"]
+            DR1["DestinationRule<br/>Load Balancing"]
         end
         
         subgraph "Security Layer"
-            VAULT1[HashiCorp Vault<br/>Secret Management]
-            PSP1[Pod Security<br/>Standards]
-            NP_SEC1[Network Policies<br/>Traffic Control]
+            VAULT1["HashiCorp Vault<br/>Secret Management"]
+            PSP1["Pod Security<br/>Standards"]
+            NP_SEC1["Network Policies<br/>Traffic Control"]
         end
         
         subgraph "Networking"
-            VPC1[VPC Network<br/>10.0.1.0/24]
-            SUBNET1[Private Subnet<br/>10.0.1.0/26]
-            NAT1[Cloud NAT<br/>Outbound Internet]
+            VPC1["VPC Network<br/>10.0.1.0/24"]
+            SUBNET1["Private Subnet<br/>10.0.1.0/26"]
+            NAT1["Cloud NAT<br/>Outbound Internet"]
         end
     end
     
     %% Secondary Region
     subgraph "Secondary Region"
         subgraph "GKE Secondary Cluster"
-            NP3[Node Pool 3<br/>2 nodes<br/>e2-standard-2]
-            NP4[Node Pool 4<br/>1 node<br/>e2-standard-2<br/>Spot instance]
+            NP3["Node Pool 3<br/>2 nodes<br/>e2-standard-2"]
+            NP4["Node Pool 4<br/>1 node<br/>e2-standard-2<br/>Spot instance"]
         end
         
         subgraph "Application Layer DR"
-            APP2[Golang App<br/>Deployment]
-            SVC2[Service<br/>ClusterIP]
-            HPA2[HPA<br/>Auto-scaling]
+            APP2["Golang App<br/>Deployment"]
+            SVC2["Service<br/>ClusterIP"]
+            HPA2["HPA<br/>Auto-scaling"]
         end
         
         subgraph "Istio Service Mesh DR"
-            GATEWAY2[Istio Gateway<br/>Failover Entry]
-            VS2[VirtualService<br/>Failover]
-            DR2[DestinationRule<br/>Circuit Breaker]
+            GATEWAY2["Istio Gateway<br/>Failover Entry"]
+            VS2["VirtualService<br/>Failover"]
+            DR2["DestinationRule<br/>Circuit Breaker"]
         end
         
         subgraph "Security Layer DR"
-            VAULT2[HashiCorp Vault<br/>HA Replica]
-            PSP2[Pod Security<br/>Standards]
-            NP_SEC2[Network Policies<br/>Traffic Control]
+            VAULT2["HashiCorp Vault<br/>HA Replica"]
+            PSP2["Pod Security<br/>Standards"]
+            NP_SEC2["Network Policies<br/>Traffic Control"]
         end
         
         subgraph "Networking DR"
-            VPC2[VPC Network<br/>10.0.2.0/24]
-            SUBNET2[Private Subnet<br/>10.0.2.0/26]
-            NAT2[Cloud NAT<br/>Outbound Internet]
+            VPC2["VPC Network<br/>10.0.2.0/24"]
+            SUBNET2["Private Subnet<br/>10.0.2.0/26"]
+            NAT2["Cloud NAT<br/>Outbound Internet"]
         end
     end
     
     %% External Services
     subgraph "GCP Services"
-        DNS[Cloud DNS<br/>Domain Resolution]
-        KMS[Cloud KMS<br/>Encryption Keys]
-        SM[Secret Manager<br/>Backup Secrets]
-        LOG[Cloud Logging<br/>Centralized Logs]
-        MON[Cloud Monitoring<br/>Infrastructure Metrics]
+        DNS["Cloud DNS<br/>Domain Resolution"]
+        KMS["Cloud KMS<br/>Encryption Keys"]
+        SM["Secret Manager<br/>Backup Secrets"]
+        LOG["Cloud Logging<br/>Centralized Logs"]
+        MON["Cloud Monitoring<br/>Infrastructure Metrics"]
     end
     
     %% CI/CD
     subgraph "CI/CD Pipeline"
-        GH[GitHub Actions<br/>Build & Deploy]
-        GCR[Container Registry<br/>Image Storage]
-        ARGO[ArgoCD<br/>GitOps Controller]
+        GH["GitHub Actions<br/>Build & Deploy"]
+        GCR["Container Registry<br/>Image Storage"]
+        ARGO["ArgoCD<br/>GitOps Controller"]
     end
     
     %% Connections
