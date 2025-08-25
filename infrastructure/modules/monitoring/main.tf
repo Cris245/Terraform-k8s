@@ -15,8 +15,47 @@ terraform {
   }
 }
 
+# Health check to ensure cluster is ready before monitoring deployment
+resource "null_resource" "cluster_health_check" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Performing cluster health check before monitoring deployment..."
+      
+      # Check if kubectl can connect
+      if ! kubectl cluster-info >/dev/null 2>&1; then
+        echo "ERROR: Cannot connect to Kubernetes cluster"
+        exit 1
+      fi
+      
+      # Check if nodes are ready
+      echo "Checking node status..."
+      if ! kubectl get nodes --no-headers | grep -q "Ready"; then
+        echo "ERROR: No nodes are in Ready state"
+        exit 1
+      fi
+      
+      # Check if core system pods are running
+      echo "Checking core system pods..."
+      if ! kubectl get pods -n kube-system --no-headers | grep -q "Running"; then
+        echo "ERROR: Core system pods are not running"
+        exit 1
+      fi
+      
+      # Check if metrics server is available
+      echo "Checking metrics server..."
+      if ! kubectl top nodes >/dev/null 2>&1; then
+        echo "WARNING: Metrics server not available, but continuing..."
+      fi
+      
+      echo "Cluster health check passed!"
+    EOT
+  }
+}
+
 # Handle webhook validation issue before installing Prometheus Operator
 resource "null_resource" "fix_webhook_validation" {
+  depends_on = [null_resource.cluster_health_check]
+  
   provisioner "local-exec" {
     command = <<-EOT
       kubectl patch validatingwebhookconfiguration prometheus-operator-admission --type='json' -p='[{"op": "replace", "path": "/webhooks/0/failurePolicy", "value": "Ignore"}]' 2>/dev/null || echo "Webhook not found, proceeding with installation"
@@ -49,7 +88,7 @@ resource "helm_release" "prometheus_operator" {
   version          = "57.0.1"
   namespace        = "monitoring"
   create_namespace = true
-  timeout          = 600 # 10 minutes timeout
+  timeout          = 1800 # 30 minutes timeout
   replace          = false # Don't replace if exists
   wait             = true
 

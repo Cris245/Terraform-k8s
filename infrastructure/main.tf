@@ -82,6 +82,46 @@ module "load_balancer" {
   depends_on = [module.gke_primary, module.gke_secondary]
 }
 
+# Wait for clusters to be ready
+resource "null_resource" "wait_for_clusters" {
+  depends_on = [module.gke_primary, module.gke_secondary]
+  
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Waiting for GKE clusters to be ready..."
+      
+      # Wait for primary cluster
+      echo "Checking primary cluster..."
+      until gcloud container clusters describe golang-ha-primary --region europe-west1 --project ${var.project_id} --format="value(status)" | grep -q "RUNNING"; do
+        echo "Primary cluster not ready yet, waiting 30 seconds..."
+        sleep 30
+      done
+      echo "Primary cluster is ready!"
+      
+      # Wait for secondary cluster  
+      echo "Checking secondary cluster..."
+      until gcloud container clusters describe golang-ha-secondary --region europe-west3 --project ${var.project_id} --format="value(status)" | grep -q "RUNNING"; do
+        echo "Secondary cluster not ready yet, waiting 30 seconds..."
+        sleep 30
+      done
+      echo "Secondary cluster is ready!"
+      
+      # Get credentials and wait for pods to be running
+      echo "Getting cluster credentials..."
+      gcloud container clusters get-credentials golang-ha-primary --region europe-west1 --project ${var.project_id}
+      
+      echo "Waiting for application pods to be ready..."
+      until kubectl get pods -n golang-app --no-headers | grep -q "Running" && kubectl get pods -n golang-app-privileged --no-headers | grep -q "Running"; do
+        echo "Application pods not ready yet, waiting 30 seconds..."
+        sleep 30
+      done
+      echo "Application pods are ready!"
+      
+      echo "All clusters and pods are ready for monitoring deployment!"
+    EOT
+  }
+}
+
 # Monitoring Stack
 module "monitoring" {
   source = "./modules/monitoring"
@@ -99,6 +139,8 @@ module "monitoring" {
     kubernetes = kubernetes.primary
     helm       = helm.primary
   }
+  
+  depends_on = [null_resource.wait_for_clusters]
 }
 
 # Note: Istio is already installed on both clusters

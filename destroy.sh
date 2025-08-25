@@ -52,6 +52,21 @@ confirm_destruction() {
     fi
 }
 
+# Function to cleanup BigQuery dataset
+cleanup_bigquery() {
+    print_status "Cleaning up BigQuery dataset..."
+    
+    PROJECT_ID=$(gcloud config get-value project 2>/dev/null || echo "")
+    if [ -n "$PROJECT_ID" ]; then
+        print_status "Removing BigQuery dataset for project: $PROJECT_ID"
+        bq rm -r -f "${PROJECT_ID}:golang_ha_audit_logs" 2>/dev/null || print_warning "BigQuery dataset already removed or not found"
+    else
+        print_warning "Could not determine project ID for BigQuery cleanup"
+    fi
+    
+    print_success "BigQuery cleanup completed"
+}
+
 # Function to destroy infrastructure
 destroy_infrastructure() {
     print_status "Destroying infrastructure with Terraform..."
@@ -101,6 +116,9 @@ main() {
     # Confirm destruction
     confirm_destruction
     
+    # Cleanup BigQuery dataset first
+    cleanup_bigquery
+    
     # Destroy infrastructure
     destroy_infrastructure
     
@@ -108,8 +126,6 @@ main() {
     cleanup_local_files
     
     print_success "All resources have been destroyed successfully!"
-    echo
-    print_warning "Note: Some resources like BigQuery datasets may take time to be fully cleaned up by GCP"
 }
 
 # Run main function

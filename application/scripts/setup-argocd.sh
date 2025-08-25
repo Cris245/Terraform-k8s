@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Configuration
-PROJECT_ID="${PROJECT_ID:-YOUR_PROJECT_ID}"
+PROJECT_ID="${PROJECT_ID:-peak-tide-469522-r7}"
 PRIMARY_REGION="${PRIMARY_REGION:-europe-west1}"
 SECONDARY_REGION="${SECONDARY_REGION:-europe-west3}"
 CLUSTER_NAME_PRIMARY="golang-ha-primary"
@@ -322,7 +322,7 @@ main() {
     log_info "Starting ArgoCD GitOps setup..."
     
     # Validate environment
-    if [ "$PROJECT_ID" = "YOUR_PROJECT_ID" ]; then
+    if [ "$PROJECT_ID" = "peak-tide-469522-r7" ]; then
         log_error "Please set PROJECT_ID environment variable"
         exit 1
     fi
