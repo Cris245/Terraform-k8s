@@ -149,7 +149,7 @@ STRESS_SUCCESS_RATE=$(grep "Success rate:" stress_load_results.txt | awk '{print
 success "Stress Load - Requests: $STRESS_REQUESTS, Success Rate: ${STRESS_SUCCESS_RATE}%"
 
 # Check auto-scaling
-echo -e "\n${PURPLE}📈 AUTO-SCALING ANALYSIS${NC}"
+echo -e "\n${PURPLE}AUTO-SCALING ANALYSIS${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
 FINAL_PODS=$(get_pod_count)

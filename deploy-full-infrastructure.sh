@@ -27,15 +27,15 @@ echo ""
 
 # Function to print status
 print_status() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}[SUCCESS] $1${NC}"
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}[WARNING] $1${NC}"
 }
 
 print_error() {
-    echo -e "${RED}❌ $1${NC}"
+    echo -e "${RED}[ERROR] $1${NC}"
 }
 
 # Step 1: Validate prerequisites
@@ -211,9 +211,9 @@ SECONDARY_GATEWAY_IP=$(kubectl config use-context "gke_${PROJECT_ID}_${SECONDARY
     kubectl get svc -n istio-system istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
 echo ""
-echo -e "${GREEN}🎉 Deployment Complete!${NC}"
+echo -e "${GREEN}Deployment Complete!${NC}"
 echo ""
-echo -e "${BLUE}📊 Cluster Information:${NC}"
+echo -e "${BLUE}Cluster Information:${NC}"
 echo -e "  Primary Cluster:   ${PRIMARY_CLUSTER} (${PRIMARY_REGION})"
 echo -e "  Secondary Cluster: ${SECONDARY_CLUSTER} (${SECONDARY_REGION})"
 echo ""
@@ -221,7 +221,7 @@ echo -e "${BLUE}🌐 Access Points:${NC}"
 echo -e "  Primary Istio Gateway:   http://${PRIMARY_GATEWAY_IP}"
 echo -e "  Secondary Istio Gateway: http://${SECONDARY_GATEWAY_IP}"
 echo ""
-echo -e "${BLUE}🔧 Testing Commands:${NC}"
+echo -e "${BLUE}Testing Commands:${NC}"
 echo -e "  # Test primary cluster"
 echo -e "  curl http://${PRIMARY_GATEWAY_IP}"
 echo -e ""
@@ -231,11 +231,11 @@ echo -e ""
 echo -e "  # Test secondary cluster"
 echo -e "  curl http://${SECONDARY_GATEWAY_IP}"
 echo ""
-echo -e "${BLUE}📈 Monitoring:${NC}"
+echo -e "${BLUE}Monitoring:${NC}"
 echo -e "  Grafana: kubectl port-forward svc/prometheus-operator-grafana 3000:80 -n monitoring"
 echo -e "  ArgoCD:  kubectl port-forward svc/argocd-server 8080:443 -n argocd"
 echo ""
-echo -e "${BLUE}🔍 Troubleshooting:${NC}"
+echo -e "${BLUE}Troubleshooting:${NC}"
 echo -e "  # Check primary cluster status"
 echo -e "  kubectl config use-context gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER}"
 echo -e "  kubectl get pods -n golang-app"

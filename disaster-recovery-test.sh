@@ -94,7 +94,7 @@ run_test "Primary Cluster Health" "kubectl get pods -n golang-app --no-headers |
 run_test "Primary Application Health" "kubectl port-forward service/golang-app-service 8080:80 -n golang-app >/dev/null 2>&1 & sleep 3 && curl -s http://localhost:8080/health | grep -q 'healthy' && kill %1" "Primary application is healthy"
 
 # Test 2: Secondary Cluster Readiness
-echo -e "\n${PURPLE}🔄 SECONDARY CLUSTER READINESS${NC}"
+echo -e "\n${PURPLE}SECONDARY CLUSTER READINESS${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
 # Get secondary cluster credentials
@@ -196,7 +196,7 @@ kubectl scale deployment golang-app --replicas=3 -n golang-app
 sleep 60
 
 # Test 6: Cross-Region Connectivity
-echo -e "\n${PURPLE}🌍 CROSS-REGION CONNECTIVITY${NC}"
+echo -e "\n${PURPLE}CROSS-REGION CONNECTIVITY${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
 run_test "Primary to Secondary Connectivity" "gcloud compute networks list --project=$PROJECT_ID | grep -q 'golang-ha-vpc'" "VPC spans both regions"
@@ -223,7 +223,7 @@ run_test "Prometheus Running" "kubectl get pods -n monitoring | grep prometheus 
 run_test "Grafana Running" "kubectl get pods -n monitoring | grep grafana | grep -q 'Running'" "Grafana continues monitoring"
 
 # Test 9: Security During Failover
-echo -e "\n${PURPLE}🔒 SECURITY DURING FAILOVER${NC}"
+echo -e "\n${PURPLE}SECURITY DURING FAILOVER${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
 run_test "Pod Security Standards" "kubectl get pods -n golang-app -o yaml | grep -q 'runAsNonRoot: true'" "Security standards maintained"
@@ -231,7 +231,7 @@ run_test "Network Policies" "kubectl get networkpolicies -n golang-app" "Network
 run_test "RBAC Configuration" "kubectl get roles,rolebindings -n golang-app" "RBAC is configured"
 
 # Test 10: Documentation and Procedures
-echo -e "\n${PURPLE}📚 DOCUMENTATION AND PROCEDURES${NC}"
+echo -e "\n${PURPLE}DOCUMENTATION AND PROCEDURES${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
 run_test "Disaster Recovery Plan" "test -f DISASTER_RECOVERY_PLAN.md" "Disaster recovery plan exists"

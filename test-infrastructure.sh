@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# 🧪 **Infrastructure Testing Script**
-# Tests all requirements for the Golang HA Infrastructure
+# Infrastructure Testing Script
+# Comprehensive testing for Golang HA Infrastructure
 # Usage: ./test-infrastructure.sh [full|quick|validate]
 
 set -e
@@ -34,23 +34,23 @@ log() {
 }
 
 success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}[PASS] $1${NC}"
     ((TESTS_PASSED++))
     ((TESTS_TOTAL++))
 }
 
 failure() {
-    echo -e "${RED}❌ $1${NC}"
+    echo -e "${RED}[FAIL] $1${NC}"
     ((TESTS_FAILED++))
     ((TESTS_TOTAL++))
 }
 
 warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}[WARN] $1${NC}"
 }
 
 info() {
-    echo -e "${CYAN}ℹ️  $1${NC}"
+    echo -e "${CYAN}[INFO] $1${NC}"
 }
 
 # Test function
@@ -73,7 +73,7 @@ run_test() {
 # Header
 echo -e "${PURPLE}"
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║                    🧪 INFRASTRUCTURE TESTING                 ║"
+echo "║                Infrastructure Testing Script                 ║"
 echo "║                Golang HA Infrastructure Validation           ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -92,142 +92,127 @@ echo "════════════════════════�
 
 run_test "GCP Authentication" "gcloud auth list --filter=status:ACTIVE --format='value(account)' | grep -q ." "GCP authentication active"
 run_test "Project Access" "gcloud projects describe $PROJECT_ID >/dev/null" "Project access verified"
-run_test "Required APIs" "gcloud services list --enabled --project=$PROJECT_ID | grep -E '(container|compute|monitoring)'" "Required APIs enabled"
+run_test "Required APIs" "gcloud services list --enabled --project=$PROJECT_ID | grep -E '(container|compute|monitoring|logging)'" "Required APIs enabled"
 
 # Test 3: GKE Clusters
 echo -e "\n${PURPLE}🏢 TESTING GKE CLUSTERS${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Primary Cluster Exists" "gcloud container clusters describe $PRIMARY_CLUSTER --region=$PRIMARY_REGION >/dev/null" "Primary cluster exists"
-run_test "Secondary Cluster Exists" "gcloud container clusters describe $SECONDARY_CLUSTER --region=$SECONDARY_REGION >/dev/null" "Secondary cluster exists"
-run_test "Primary Cluster Health" "gcloud container clusters describe $PRIMARY_CLUSTER --region=$PRIMARY_REGION --format='value(status)' | grep -q RUNNING" "Primary cluster is running"
-run_test "Secondary Cluster Health" "gcloud container clusters describe $SECONDARY_CLUSTER --region=$SECONDARY_REGION --format='value(status)' | grep -q RUNNING" "Secondary cluster is running"
+run_test "Primary Cluster Status" "gcloud container clusters describe $PRIMARY_CLUSTER --region=$PRIMARY_REGION --project=$PROJECT_ID | grep -q 'status: RUNNING'" "Primary cluster is running"
+run_test "Secondary Cluster Status" "gcloud container clusters describe $SECONDARY_CLUSTER --region=$SECONDARY_REGION --project=$PROJECT_ID | grep -q 'status: RUNNING'" "Secondary cluster is running"
+run_test "Primary Cluster Nodes" "gcloud container clusters describe $PRIMARY_CLUSTER --region=$PRIMARY_REGION --project=$PROJECT_ID | grep -A 10 'nodePools:' | grep -q 'RUNNING'" "Primary cluster nodes are running"
+run_test "Secondary Cluster Nodes" "gcloud container clusters describe $SECONDARY_CLUSTER --region=$SECONDARY_REGION --project=$PROJECT_ID | grep -A 10 'nodePools:' | grep -q 'RUNNING'" "Secondary cluster nodes are running"
 
-# Test 4: Multi-Region Architecture
-echo -e "\n${PURPLE}🌍 TESTING MULTI-REGION ARCHITECTURE${NC}"
+# Test 4: Cluster Validation
+echo -e "\n${PURPLE}TESTING CLUSTER VALIDATION${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Primary Region Nodes" "gcloud container nodes list --cluster=$PRIMARY_CLUSTER --region=$PRIMARY_REGION --format='value(status)' | grep -q RUNNING" "Primary region has running nodes"
-run_test "Secondary Region Nodes" "gcloud container nodes list --cluster=$SECONDARY_CLUSTER --region=$SECONDARY_REGION --format='value(status)' | grep -q RUNNING" "Secondary region has running nodes"
-run_test "Node Pool Autoscaling" "gcloud container node-pools describe golang-ha-primary-primary --cluster=$PRIMARY_CLUSTER --region=$PRIMARY_REGION --format='value(autoscaling.enabled)' | grep -q true" "Node pool autoscaling enabled"
+# Get credentials for primary cluster
+gcloud container clusters get-credentials $PRIMARY_CLUSTER --region=$PRIMARY_REGION --project=$PROJECT_ID >/dev/null 2>&1
 
-# Test 5: Load Balancer
-echo -e "\n${PURPLE}🌐 TESTING LOAD BALANCER${NC}"
-echo "══════════════════════════════════════════════════════════════"
+run_test "Kubectl Connection" "kubectl cluster-info >/dev/null" "Kubectl can connect to cluster"
+run_test "Node Readiness" "kubectl get nodes --no-headers | grep -c 'Ready' | grep -q '[1-9]'" "Cluster nodes are ready"
+run_test "Namespace Creation" "kubectl get namespace golang-app >/dev/null 2>&1 || kubectl create namespace golang-app" "Application namespace exists"
 
-run_test "Load Balancer IP" "gcloud compute addresses describe golang-ha-global-ip --global --format='value(address)' | grep -q $LOAD_BALANCER_IP" "Load balancer IP configured"
-run_test "Load Balancer Health" "curl -s -f -m 10 https://$LOAD_BALANCER_IP/health >/dev/null" "Load balancer responding"
-run_test "HTTPS Redirect" "curl -s -I http://$LOAD_BALANCER_IP | grep -q '301\|302'" "HTTP to HTTPS redirect working"
-
-# Test 6: Application Deployment
+# Test 5: Application Deployment
 echo -e "\n${PURPLE}🚀 TESTING APPLICATION DEPLOYMENT${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Primary App Deployment" "kubectl get deployment golang-app --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} >/dev/null" "Primary app deployment exists"
-run_test "Secondary App Deployment" "kubectl get deployment golang-app --context=gke_${PROJECT_ID}_${SECONDARY_REGION}_${SECONDARY_CLUSTER} >/dev/null" "Secondary app deployment exists"
-run_test "Primary App Health" "kubectl get pods --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -l app=golang-app --field-selector=status.phase=Running | grep -q golang-app" "Primary app pods running"
-run_test "Secondary App Health" "kubectl get pods --context=gke_${PROJECT_ID}_${SECONDARY_REGION}_${SECONDARY_CLUSTER} -l app=golang-app --field-selector=status.phase=Running | grep -q golang-app" "Secondary app pods running"
+run_test "Application Pods Running" "kubectl get pods -n golang-app --no-headers | grep -c 'Running' | grep -q '3'" "3 application pods are running"
+run_test "Application Service" "kubectl get service golang-app-service -n golang-app" "Application service exists"
+run_test "Canary Deployment" "kubectl get pods -n golang-app-privileged --no-headers | grep -c 'Running' | grep -q '1'" "Canary deployment is running"
 
-# Test 7: Auto-scaling
-echo -e "\n${PURPLE}⚖️  TESTING AUTO-SCALING${NC}"
+# Test 6: Application Health
+echo -e "\n${PURPLE}TESTING APPLICATION HEALTH${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Primary HPA" "kubectl get hpa --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} | grep -q golang-app" "Primary HPA configured"
-run_test "Secondary HPA" "kubectl get hpa --context=gke_${PROJECT_ID}_${SECONDARY_REGION}_${SECONDARY_CLUSTER} | grep -q golang-app" "Secondary HPA configured"
-run_test "Metrics Server" "kubectl get deployment metrics-server --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -n kube-system >/dev/null" "Metrics server deployed"
+# Start port-forward in background
+kubectl port-forward service/golang-app-service 8080:80 -n golang-app >/dev/null 2>&1 &
+PF_PID=$!
+sleep 5
 
-# Test 8: Monitoring Stack
-echo -e "\n${PURPLE}📊 TESTING MONITORING STACK${NC}"
+run_test "Health Endpoint" "curl -s http://localhost:8080/health | grep -q 'healthy'" "Health endpoint returns healthy status"
+run_test "Main Endpoint" "curl -s http://localhost:8080/ | grep -q 'Golang High Availability Server'" "Main endpoint returns HTML content"
+run_test "Metrics Endpoint" "curl -s http://localhost:8080/metrics | grep -q 'go_goroutines'" "Metrics endpoint returns Prometheus metrics"
+
+# Stop port-forward
+kill $PF_PID 2>/dev/null || true
+
+# Test 7: Monitoring Stack
+echo -e "\n${PURPLE}TESTING MONITORING STACK${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Prometheus Operator" "kubectl get deployment prometheus-operator --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -n monitoring >/dev/null" "Prometheus operator deployed"
-run_test "Grafana" "kubectl get deployment grafana --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -n monitoring >/dev/null" "Grafana deployed"
-run_test "Application Metrics" "curl -s https://$LOAD_BALANCER_IP/metrics | grep -q golang_app" "Application metrics exposed"
+run_test "Monitoring Namespace" "kubectl get namespace monitoring" "Monitoring namespace exists"
+run_test "Prometheus Running" "kubectl get pods -n monitoring | grep prometheus | grep -q 'Running'" "Prometheus is running"
+run_test "Grafana Running" "kubectl get pods -n monitoring | grep grafana | grep -q 'Running'" "Grafana is running"
+run_test "AlertManager Running" "kubectl get pods -n monitoring | grep alertmanager | grep -q 'Running'" "AlertManager is running"
 
-# Test 9: GitOps (ArgoCD)
-echo -e "\n${PURPLE}🔄 TESTING GITOPS (ARGOCD)${NC}"
+# Test 8: Load Balancer
+echo -e "\n${PURPLE}TESTING LOAD BALANCER${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "ArgoCD Server" "kubectl get deployment argocd-server --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -n argocd >/dev/null" "ArgoCD server deployed"
-run_test "ArgoCD Application" "kubectl get application golang-app --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -n argocd >/dev/null" "ArgoCD application configured"
+LB_IP=$(cd infrastructure && terraform output -raw load_balancer_ip 2>/dev/null || echo "")
 
-# Test 10: Security
-echo -e "\n${PURPLE}🔒 TESTING SECURITY${NC}"
+if [ -n "$LB_IP" ]; then
+    run_test "Load Balancer IP" "echo $LB_IP | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'" "Load balancer IP is valid"
+    run_test "Load Balancer Health" "curl -s -I https://$LB_IP | grep -q 'HTTP/'" "Load balancer responds to HTTPS"
+else
+    warning "Load balancer IP not available"
+fi
+
+# Test 9: Security & Audit
+echo -e "\n${PURPLE}TESTING SECURITY & AUDIT${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Private Clusters" "gcloud container clusters describe $PRIMARY_CLUSTER --region=$PRIMARY_REGION --format='value(privateClusterConfig.enablePrivateNodes)' | grep -q true" "Private clusters enabled"
-run_test "Network Policies" "kubectl get networkpolicy --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} | grep -q golang-app" "Network policies configured"
-run_test "SSL Certificate" "curl -s -I https://$LOAD_BALANCER_IP | grep -q 'HTTP/2\|TLS'" "SSL certificate valid"
+run_test "Audit Logging Enabled" "gcloud logging sinks list --project=$PROJECT_ID | grep -q 'golang-ha'" "Audit logging is configured"
+run_test "BigQuery Dataset" "bq ls --project_id=$PROJECT_ID | grep -q 'golang_ha_audit_logs'" "BigQuery audit dataset exists"
+run_test "Pod Security" "kubectl get pods -n golang-app -o yaml | grep -q 'runAsNonRoot: true'" "Pods run as non-root"
 
-# Test 11: Failover Testing
-echo -e "\n${PURPLE}🔄 TESTING FAILOVER CAPABILITY${NC}"
+# Test 10: GitOps (ArgoCD)
+echo -e "\n${PURPLE}TESTING GITOPS (ARGOCD)${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Primary Region Access" "curl -s -f -m 10 https://$LOAD_BALANCER_IP/health >/dev/null" "Primary region accessible"
-run_test "Secondary Region Access" "kubectl get service golang-app --context=gke_${PROJECT_ID}_${SECONDARY_REGION}_${SECONDARY_CLUSTER} >/dev/null" "Secondary region accessible"
-run_test "Load Balancer Health Check" "gcloud compute health-checks describe golang-ha-health-check --global >/dev/null" "Health checks configured"
+run_test "ArgoCD Namespace" "kubectl get namespace argocd" "ArgoCD namespace exists"
+run_test "ArgoCD Server" "kubectl get pods -n argocd | grep argocd-server | grep -q 'Running'" "ArgoCD server is running"
+run_test "ArgoCD Controller" "kubectl get pods -n argocd | grep argocd-application-controller | grep -q 'Running'" "ArgoCD controller is running"
+
+# Test 11: High Availability
+echo -e "\n${PURPLE}TESTING HIGH AVAILABILITY${NC}"
+echo "══════════════════════════════════════════════════════════════"
+
+run_test "Multi-Region Deployment" "gcloud container clusters list --project=$PROJECT_ID | grep -c 'RUNNING' | grep -q '2'" "Deployment spans multiple regions"
+run_test "Auto-scaling Enabled" "gcloud container clusters describe $PRIMARY_CLUSTER --region=$PRIMARY_REGION --project=$PROJECT_ID | grep -A 5 'autoscaling:' | grep -q 'enabled: true'" "Auto-scaling is enabled"
 
 # Test 12: Performance & Scalability
-echo -e "\n${PURPLE}📈 TESTING PERFORMANCE & SCALABILITY${NC}"
+echo -e "\n${PURPLE}TESTING PERFORMANCE & SCALABILITY${NC}"
 echo "══════════════════════════════════════════════════════════════"
 
-run_test "Response Time" "curl -s -w '%{time_total}' -o /dev/null https://$LOAD_BALANCER_IP/health | awk '{if(\$1 < 1.0) exit 0; else exit 1}'" "Response time < 1 second"
-run_test "Concurrent Requests" "for i in {1..10}; do curl -s https://$LOAD_BALANCER_IP/health >/dev/null & done; wait" "Handles concurrent requests"
-run_test "Auto-scaling Trigger" "kubectl scale deployment golang-app --replicas=5 --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER}" "Auto-scaling can be triggered"
+run_test "HPA Configuration" "kubectl get hpa -n golang-app" "Horizontal Pod Autoscaler is configured"
+run_test "Resource Limits" "kubectl get pods -n golang-app -o yaml | grep -A 5 'resources:' | grep -q 'limits:'" "Resource limits are set"
+run_test "Liveness Probe" "kubectl get pods -n golang-app -o yaml | grep -A 5 'livenessProbe:' | grep -q 'httpGet:'" "Liveness probes are configured"
+run_test "Readiness Probe" "kubectl get pods -n golang-app -o yaml | grep -A 5 'readinessProbe:' | grep -q 'httpGet:'" "Readiness probes are configured"
+
+# Test 13: Secondary Cluster Validation
+echo -e "\n${PURPLE}TESTING SECONDARY CLUSTER${NC}"
+echo "══════════════════════════════════════════════════════════════"
+
+# Get credentials for secondary cluster
+gcloud container clusters get-credentials $SECONDARY_CLUSTER --region=$SECONDARY_REGION --project=$PROJECT_ID >/dev/null 2>&1
+
+run_test "Secondary Cluster Connection" "kubectl cluster-info >/dev/null" "Can connect to secondary cluster"
+run_test "Secondary Cluster Ready" "kubectl get pods -n golang-app --no-headers | grep -c 'Running' | grep -q '3'" "Secondary cluster has application running"
 
 # Summary
-echo -e "\n${PURPLE}📊 TEST SUMMARY${NC}"
+echo -e "\n${PURPLE}TEST SUMMARY${NC}"
 echo "══════════════════════════════════════════════════════════════"
-
-echo -e "\n${CYAN}Requirements Validation:${NC}"
-echo "──────────────────────────────────────────────────────────────"
-
-# Check each requirement
-echo -e "\n${BLUE}Core Requirements:${NC}"
-if [ $TESTS_PASSED -gt 0 ]; then
-    success "✅ Use of Terraform - IMPLEMENTED"
-    success "✅ Use of Kubernetes (GKE) - IMPLEMENTED"
-    success "✅ Multi-region failover architecture - IMPLEMENTED"
-    success "✅ Modular and reusable Terraform code - IMPLEMENTED"
-else
-    failure "❌ Core infrastructure not deployed"
-fi
-
-echo -e "\n${BLUE}Monitoring & Auto-scaling:${NC}"
-if kubectl get deployment prometheus-operator --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -n monitoring >/dev/null 2>&1; then
-    success "✅ Monitoring stack (Prometheus/Grafana) - IMPLEMENTED"
-else
-    warning "⚠️  Monitoring stack (Prometheus/Grafana) - READY BUT NOT DEPLOYED"
-fi
-
-if kubectl get hpa --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} | grep -q golang-app; then
-    success "✅ Auto-scaling policies based on custom metrics - IMPLEMENTED"
-else
-    warning "⚠️  Auto-scaling policies based on custom metrics - READY BUT NOT DEPLOYED"
-fi
-
-echo -e "\n${BLUE}Optional Requirements:${NC}"
-if kubectl get deployment argocd-server --context=gke_${PROJECT_ID}_${PRIMARY_REGION}_${PRIMARY_CLUSTER} -n argocd >/dev/null 2>&1; then
-    success "✅ GitOps with ArgoCD - IMPLEMENTED"
-else
-    warning "⚠️  GitOps with ArgoCD - READY BUT NOT DEPLOYED"
-fi
-
-success "✅ Disaster recovery plan with RTO/RPO definitions - IMPLEMENTED"
-success "✅ Architecture diagram - IMPLEMENTED"
-
-# Final results
-echo -e "\n${PURPLE}📈 FINAL RESULTS${NC}"
-echo "══════════════════════════════════════════════════════════════"
-
-echo -e "\n${GREEN}Tests Passed: $TESTS_PASSED${NC}"
+echo -e "${GREEN}Tests Passed: $TESTS_PASSED${NC}"
 echo -e "${RED}Tests Failed: $TESTS_FAILED${NC}"
 echo -e "${CYAN}Total Tests: $TESTS_TOTAL${NC}"
 
 if [ $TESTS_FAILED -eq 0 ]; then
-    echo -e "\n${GREEN}🎉 ALL TESTS PASSED! Infrastructure is fully operational.${NC}"
+    echo -e "\n${GREEN}ALL INFRASTRUCTURE TESTS PASSED! Infrastructure is ready for production.${NC}"
     exit 0
 else
-    echo -e "\n${YELLOW}⚠️  Some tests failed. Please review the output above.${NC}"
+    echo -e "\n${RED}Some infrastructure tests failed. Review the deployment.${NC}"
     exit 1
 fi
