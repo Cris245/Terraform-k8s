@@ -1,4 +1,4 @@
-# DevOps Challenge Solution
+# k8s with Terraform playground
 
 **Concept demonstration** of production-ready Golang HA infrastructure on GCP with complete CI/CD and security implementation.
 
