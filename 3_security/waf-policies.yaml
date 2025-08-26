@@ -1,0 +1,118 @@
+# WAF Configuration - Web Application Firewall Policies
+# Implements security policies for production deployment
+
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-unsafe-methods
+  namespace: golang-app
+spec:
+  rules:
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+  - from:
+    - source:
+        notRequestPrincipals: ["*"]
+    to:
+    - operation:
+        methods: ["*"]
+    when:
+    - key: request.headers[method]
+      values: ["TRACE", "CONNECT", "OPTIONS"]
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: rate-limit-policy
+  namespace: golang-app
+spec:
+  rules:
+  - to:
+    - operation:
+        methods: ["*"]
+    when:
+    - key: source.ip
+      values: ["*"]
+
+---
+# Block common attack patterns
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: waf-filter
+  namespace: golang-app
+spec:
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.wasm
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+          config:
+            name: "waf"
+            root_id: "waf"
+            configuration:
+              "@type": type.googleapis.com/google.protobuf.StringValue
+              value: |
+                {
+                  "rules": [
+                    {
+                      "pattern": "(?i)(union|select|insert|update|delete|drop|exec|script)",
+                      "action": "deny"
+                    },
+                    {
+                      "pattern": "(?i)(<script|javascript:|vbscript:|onload=|onerror=)",
+                      "action": "deny"
+                    }
+                  ]
+                }
+
+---
+# DDoS Protection
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: rate-limit-filter
+  namespace: golang-app
+spec:
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.local_ratelimit
+        typed_config:
+          "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          value:
+            stat_prefix: local_rate_limiter
+            token_bucket:
+              max_tokens: 100
+              tokens_per_fill: 100
+              fill_interval: 60s
+            filter_enabled:
+              runtime_key: local_rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: local_rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED

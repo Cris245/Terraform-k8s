@@ -1,0 +1,46 @@
+# Vault configuration for development/testing
+server:
+  dev:
+    enabled: false
+  
+  # Enable high availability mode
+  ha:
+    enabled: true
+    replicas: 1  # Start with 1 replica for simplicity
+    raft:
+      enabled: true
+      setNodeId: true
+  
+  # Service configuration
+  service:
+    type: LoadBalancer
+    port: 8200
+  
+  # Storage
+  dataStorage:
+    enabled: true
+    size: 2Gi
+    storageClass: null
+    accessMode: ReadWriteOnce
+  
+  # Vault configuration
+  config: |
+    ui = true
+    
+    listener "tcp" {
+      tls_disable = 1
+      address = "[::]:8200"
+      cluster_address = "[::]:8201"
+    }
+    
+    storage "raft" {
+      path = "/vault/data"
+    }
+    
+    service_registration "kubernetes" {}
+
+# UI configuration
+ui:
+  enabled: true
+  serviceType: LoadBalancer
+

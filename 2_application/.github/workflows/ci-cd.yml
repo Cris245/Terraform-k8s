@@ -1,0 +1,157 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER_PRIMARY: golang-ha-primary
+  GKE_CLUSTER_SECONDARY: golang-ha-secondary
+  GKE_REGION_PRIMARY: us-central1
+  GKE_REGION_SECONDARY: europe-west1
+  DEPLOYMENT_NAME: golang-app
+  IMAGE: golang-ha
+
+jobs:
+  build:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.build.outputs.image-tag }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
+
+    - name: Build Docker image
+      id: build
+      run: |
+        IMAGE_TAG=gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA
+        docker build -t $IMAGE_TAG -t gcr.io/$PROJECT_ID/$IMAGE:latest ./golang-server/
+        echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Security scan with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE }}:${{ github.sha }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Push to Google Container Registry
+      run: |
+        docker push gcr.io/$PROJECT_ID/$IMAGE:$GITHUB_SHA
+        docker push gcr.io/$PROJECT_ID/$IMAGE:latest
+
+  deploy:
+    name: Deploy to GKE
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials $GKE_CLUSTER_PRIMARY --zone $GKE_ZONE_PRIMARY
+        gcloud container clusters get-credentials $GKE_CLUSTER_SECONDARY --zone $GKE_ZONE_SECONDARY
+
+    - name: Deploy to Primary Cluster
+      run: |
+        kubectl config use-context gke_${PROJECT_ID}_${GKE_ZONE_PRIMARY}_${GKE_CLUSTER_PRIMARY}
+        kubectl set image deployment/$DEPLOYMENT_NAME golang-app=${{ needs.build.outputs.image-tag }} -n golang-app
+        kubectl rollout status deployment/$DEPLOYMENT_NAME -n golang-app --timeout=300s
+
+    - name: Health check Primary
+      run: |
+        kubectl config use-context gke_${PROJECT_ID}_${GKE_ZONE_PRIMARY}_${GKE_CLUSTER_PRIMARY}
+        kubectl wait --for=condition=available --timeout=300s deployment/$DEPLOYMENT_NAME -n golang-app
+
+    - name: Deploy to Secondary Cluster
+      run: |
+        kubectl config use-context gke_${PROJECT_ID}_${GKE_ZONE_SECONDARY}_${GKE_CLUSTER_SECONDARY}
+        kubectl set image deployment/$DEPLOYMENT_NAME golang-app=${{ needs.build.outputs.image-tag }} -n golang-app
+        kubectl rollout status deployment/$DEPLOYMENT_NAME -n golang-app --timeout=300s
+
+    - name: Health check Secondary
+      run: |
+        kubectl config use-context gke_${PROJECT_ID}_${GKE_ZONE_SECONDARY}_${GKE_CLUSTER_SECONDARY}
+        kubectl wait --for=condition=available --timeout=300s deployment/$DEPLOYMENT_NAME -n golang-app
+
+  canary:
+    name: Canary Deployment
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials $GKE_CLUSTER_PRIMARY --zone $GKE_ZONE_PRIMARY
+
+    - name: Deploy Canary (10% traffic)
+      run: |
+        kubectl apply -f k8s-manifests/canary-deployment.yaml
+        kubectl set image deployment/golang-app-canary golang-app-canary=${{ needs.build.outputs.image-tag }} -n golang-app-privileged
+        kubectl rollout status deployment/golang-app-canary -n golang-app-privileged --timeout=300s
+
+    - name: Monitor Canary Metrics
+      run: |
+        echo "Monitoring canary deployment for 5 minutes..."
+        sleep 300
+        
+        # Check error rate
+        ERROR_RATE=$(kubectl exec -n monitoring deployment/prometheus-operator-prometheus -- \
+          promtool query instant 'rate(http_requests_total{status=~"5.."}[5m])' | tail -1 | awk '{print $2}')
+        
+        if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+          echo "High error rate detected: $ERROR_RATE"
+          echo "Rolling back canary deployment..."
+          kubectl rollout undo deployment/golang-app-canary -n golang-app-privileged
+          exit 1
+        fi
+
+    - name: Promote Canary to Production
+      if: success()
+      run: |
+        echo "Canary validation successful, promoting to production..."
+        kubectl set image deployment/$DEPLOYMENT_NAME golang-app=${{ needs.build.outputs.image-tag }} -n golang-app
+        kubectl rollout status deployment/$DEPLOYMENT_NAME -n golang-app --timeout=300s
+        
+        # Scale down canary
+        kubectl scale deployment/golang-app-canary --replicas=0 -n golang-app-privileged
+
+    - name: Rollback on Failure
+      if: failure()
+      run: |
+        echo "Canary deployment failed, rolling back..."
+        kubectl rollout undo deployment/golang-app-canary -n golang-app-privileged
+        kubectl scale deployment/golang-app-canary --replicas=0 -n golang-app-privileged

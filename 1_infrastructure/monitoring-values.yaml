@@ -1,0 +1,74 @@
+# Optimized monitoring stack for our cluster
+grafana:
+  enabled: true
+  adminPassword: admin123
+  service:
+    type: LoadBalancer
+  persistence:
+    enabled: true
+    size: 2Gi
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+    resources:
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+      requests:
+        memory: 1Gi
+        cpu: 500m
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 200m
+      requests:
+        memory: 256Mi
+        cpu: 100m
+
+# Disable components we don't need for now
+kubeApiServer:
+  enabled: false
+kubelet:
+  enabled: true
+kubeControllerManager:
+  enabled: false
+coreDns:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# Node exporter for metrics
+nodeExporter:
+  enabled: true
+
+# Disable admission webhooks completely to avoid TLS secret issues
+prometheusOperator:
+  admissionWebhooks:
+    enabled: false
+    failurePolicy: Ignore
+    patch:
+      enabled: false
+  tls:
+    enabled: false

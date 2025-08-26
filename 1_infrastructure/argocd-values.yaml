@@ -1,0 +1,21 @@
+# ArgoCD configuration
+server:
+  service:
+    type: LoadBalancer
+  
+  # Admin password (change in production)
+  config:
+    admin.enabled: true
+  
+  # Insecure mode for HTTP access
+  extraArgs:
+    - --insecure
+
+# Disable dex for simplicity
+dex:
+  enabled: false
+
+# Redis configuration
+redis:
+  enabled: true
+

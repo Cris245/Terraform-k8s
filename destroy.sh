@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Golang HA Server - Destroy Script
-# This script destroys all resources created by the deployment
+# DevOps Challenge - Simple Cleanup Script
+# This is a demonstration script - may require additional steps for complete cleanup
 
 set -e
 
@@ -9,124 +9,69 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+echo -e "${RED}=== DevOps Challenge Cleanup ===${NC}"
+echo -e "${YELLOW}Note: This is a demonstration cleanup script${NC}"
+echo -e "${YELLOW}For complete cleanup, manual verification may be required${NC}"
+echo ""
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+# Get current project
+CURRENT_PROJECT=$(gcloud config get-value project 2>/dev/null)
+if [ -z "$CURRENT_PROJECT" ]; then
+    echo -e "${RED}[ERROR] No GCP project set. Run: gcloud config set project YOUR_PROJECT_ID${NC}"
+    exit 1
+fi
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+echo -e "${YELLOW}[INFO] Cleaning up project: $CURRENT_PROJECT${NC}"
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# Step 1: Terraform Destroy
+echo -e "\n${YELLOW}[STEP 1] Destroying Terraform Infrastructure...${NC}"
 
-# Function to confirm destruction
-confirm_destruction() {
-    echo
-    print_warning "This will destroy ALL resources created by the deployment:"
-    echo "  - GKE clusters (primary and secondary)"
-    echo "  - VPC network and subnets"
-    echo "  - Load balancer and SSL certificates"
-    echo "  - Monitoring stack (Prometheus, Grafana)"
-    echo "  - ArgoCD"
-    echo "  - Application deployments"
-    echo "  - Audit logging configuration"
-    echo "  - All associated GCP resources"
-    echo
-    print_warning "This action is IRREVERSIBLE!"
-    echo
-    read -p "Are you sure you want to continue? Type 'yes' to confirm: " confirmation
-    
-    if [ "$confirmation" != "yes" ]; then
-        print_status "Destruction cancelled"
-        exit 0
-    fi
-}
+cd 1_infrastructure
 
-# Function to cleanup BigQuery dataset
-cleanup_bigquery() {
-    print_status "Cleaning up BigQuery dataset..."
-    
-    PROJECT_ID=$(gcloud config get-value project 2>/dev/null || echo "")
-    if [ -n "$PROJECT_ID" ]; then
-        print_status "Removing BigQuery dataset for project: $PROJECT_ID"
-        bq rm -r -f "${PROJECT_ID}:golang_ha_audit_logs" 2>/dev/null || print_warning "BigQuery dataset already removed or not found"
-    else
-        print_warning "Could not determine project ID for BigQuery cleanup"
-    fi
-    
-    print_success "BigQuery cleanup completed"
-}
+if [ -f "terraform.tfstate" ]; then
+    echo -e "${YELLOW}[INFO] Running terraform destroy...${NC}"
+    terraform destroy -var="project_id=$CURRENT_PROJECT" -auto-approve
+    echo -e "${GREEN}[SUCCESS] Terraform resources destroyed${NC}"
+else
+    echo -e "${YELLOW}[INFO] No terraform.tfstate found, skipping terraform destroy${NC}"
+fi
 
-# Function to destroy infrastructure
-destroy_infrastructure() {
-    print_status "Destroying infrastructure with Terraform..."
-    
-    # Change to infrastructure directory
-    cd infrastructure
-    
-    # Initialize Terraform if needed
-    if [ ! -d ".terraform" ]; then
-        terraform init
-    fi
-    
-    # Plan the destruction
-    print_status "Planning Terraform destruction..."
-    terraform plan -destroy -out=destroy-plan
-    
-    # Apply the destruction
-    print_status "Applying Terraform destruction..."
-    terraform apply destroy-plan
-    
-    # Return to root directory
-    cd ..
-    
-    print_success "Infrastructure destruction completed successfully"
-}
+cd ..
 
-# Function to cleanup local files
-cleanup_local_files() {
-    print_status "Cleaning up local files..."
-    
-    # Remove Terraform files from infrastructure directory
-    rm -f infrastructure/tfplan infrastructure/destroy-plan
-    rm -f infrastructure/terraform.tfvars.bak
-    
-    # Remove Terraform files from root directory
-    rm -f tfplan destroy-plan
-    rm -f terraform.tfvars.bak
-    
-    print_success "Local cleanup completed"
-}
+# Step 2: Clean Docker Images
+echo -e "\n${YELLOW}[STEP 2] Cleaning Docker Images...${NC}"
 
-# Main execution
-main() {
-    print_status "Starting Golang HA Server destruction..."
-    echo
-    
-    # Confirm destruction
-    confirm_destruction
-    
-    # Cleanup BigQuery dataset first
-    cleanup_bigquery
-    
-    # Destroy infrastructure
-    destroy_infrastructure
-    
-    # Cleanup local files
-    cleanup_local_files
-    
-    print_success "All resources have been destroyed successfully!"
-}
+# Remove local Docker images
+echo -e "${YELLOW}[INFO] Removing local Docker images...${NC}"
+docker rmi gcr.io/$CURRENT_PROJECT/golang-ha:latest 2>/dev/null || echo -e "${YELLOW}[INFO] Local image not found${NC}"
 
-# Run main function
-main "$@"
+# List GCR images (for manual cleanup)
+echo -e "${YELLOW}[INFO] Listing remaining GCR images:${NC}"
+gcloud container images list --repository=gcr.io/$CURRENT_PROJECT 2>/dev/null || echo -e "${YELLOW}[INFO] No GCR images found${NC}"
+
+# Step 3: Clean Kubernetes Resources
+echo -e "\n${YELLOW}[STEP 3] Cleaning Kubernetes Resources...${NC}"
+
+# Check for remaining clusters
+echo -e "${YELLOW}[INFO] Checking for remaining GKE clusters:${NC}"
+gcloud container clusters list --format="table(name,location,status)" 2>/dev/null || echo -e "${YELLOW}[INFO] No clusters found${NC}"
+
+# Step 4: Manual Cleanup Reminder
+echo -e "\n${YELLOW}[STEP 4] Manual Verification Recommended...${NC}"
+
+echo -e "${YELLOW}[INFO] Please manually verify cleanup of:${NC}"
+echo -e "- Load balancers: gcloud compute forwarding-rules list"
+echo -e "- Persistent disks: gcloud compute disks list"
+echo -e "- Static IPs: gcloud compute addresses list"
+echo -e "- VPC networks: gcloud compute networks list"
+echo -e "- Firewall rules: gcloud compute firewall-rules list"
+echo -e "- Container images: gcloud container images list"
+
+# Final Status
+echo -e "\n${GREEN}=== Cleanup Complete ===${NC}"
+echo ""
+echo -e "${YELLOW}Note: This demo script handles basic cleanup.${NC}"
+echo -e "${YELLOW}For complete cleanup, verify all resources manually.${NC}"
+echo -e "${YELLOW}Some resources may persist and continue to incur charges.${NC}"

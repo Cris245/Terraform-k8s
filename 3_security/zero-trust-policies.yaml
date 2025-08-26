@@ -1,0 +1,144 @@
+# Zero Trust Network Policies
+# Implements Zero Trust architecture with default deny-all and explicit allow rules
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: golang-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# Allow ingress from load balancer to application
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-lb-to-app
+  namespace: golang-app
+spec:
+  podSelector:
+    matchLabels:
+      app: golang-app
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Allow application to monitoring
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-to-monitoring
+  namespace: golang-app
+spec:
+  podSelector:
+    matchLabels:
+      app: golang-app
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS
+    - protocol: TCP
+      port: 53   # DNS
+    - protocol: UDP
+      port: 53   # DNS
+
+---
+# Allow monitoring namespace to scrape metrics
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: golang-app
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Deny all communication between application pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-pod-to-pod
+  namespace: golang-app
+spec:
+  podSelector:
+    matchLabels:
+      app: golang-app
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}
+  egress:
+  - to:
+    - namespaceSelector: {}
+
+---
+# Service Mesh Security Policy
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: golang-app
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# Request Authentication
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: golang-app-auth
+  namespace: golang-app
+spec:
+  selector:
+    matchLabels:
+      app: golang-app
+  jwtRules:
+  - issuer: "https://accounts.google.com"
+    jwksUri: "https://www.googleapis.com/oauth2/v3/certs"
+
+---
+# Workload Identity for GCP Integration
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: golang-app-ksa
+  namespace: golang-app
+  annotations:
+    iam.gke.io/gcp-service-account: golang-app-gsa@PROJECT_ID.iam.gserviceaccount.com

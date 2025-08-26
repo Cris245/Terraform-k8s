@@ -1,175 +1,142 @@
-# Golang HA Infrastructure - Holded DevOps Challenge
+# DevOps Challenge Solution
 
-A complete, production-ready Golang high-availability infrastructure deployed on Google Cloud Platform using Terraform and Kubernetes.
+**Concept demonstration** of production-ready Golang HA infrastructure on GCP with complete CI/CD and security implementation.
 
-## 🎯 Challenge Requirements
+> ⚠️ **Important**: This is a conceptual implementation for demonstration purposes. Some components may require additional configuration, testing, or adjustments for production use.
 
-This solution addresses all requirements from the [Holded DevOps Challenge](https://github.com/holdedhub/careers/tree/main/challenges/devops):
+## Structure
 
-### 1. Infrastructure
-- **Terraform**: Complete Infrastructure as Code
-- **Kubernetes (GKE)**: Multi-region clusters
-- **Multi-region failover**: Primary (europe-west1) + Secondary (europe-west3)
-- **Monitoring stack**: Prometheus + Grafana
-- **Auto-scaling**: Based on custom metrics
-- **Architecture diagram**: Complete documentation
-- **Modular Terraform**: Reusable modules
-- **GitOps**: ArgoCD implementation
-- **Disaster recovery**: RTO/RPO definitions
-
-### 2. Application (CI/CD)
-- **Containers**: Docker-based automation
-- **CI pipeline**: GitHub Actions deployment to GCP
-- **Canary deployments**: Traffic distribution
-- **Automated rollback**: Failure detection and recovery
-- **Port 443**: SSL/TLS with self-signed certificates
-
-### 3. Security
-- **Zero Trust**: Network security policies
-- **Vault**: HashiCorp Vault for secrets
-- **Pod Security**: Security policies implemented
-- **WAF**: Web Application Firewall (Istio-based)
-- **Audit logging**: Comprehensive logging system
-
-## Quick Start
-
-### Prerequisites
-- Google Cloud CLI (`gcloud`)
-- Terraform
-- Docker
-- Kubectl
-- Helm
-
-### 1. Setup and Deploy
-```bash
-# Clone the repository
-git clone <repository-url>
-cd Terraform-k8s
-
-# Run the complete setup (takes 15-20 minutes)
-./setup.sh
+```
+├── 1_infrastructure/    # Terraform code for GCP HA architecture
+├── 2_application/       # Golang app + CI/CD pipeline
+├── 3_security/         # Security policies and configurations
+├── setup.sh           # Automated deployment script
+└── destroy.sh         # Complete cleanup script
 ```
 
-### 2. Test the Infrastructure
+## Quick Deploy
+
+### Prerequisites
+- Google Cloud CLI authenticated
+- Terraform >= 1.0
+- Docker running
+- kubectl and Helm
+
+### Deployment
+```bash
+# 1. Set your GCP project
+export PROJECT_ID="your-gcp-project-id"
+gcloud config set project $PROJECT_ID
+
+# 2. Run setup (prepares environment, doesn't deploy)
+./setup.sh
+
+# 3. Deploy manually (recommended for evaluation)
+cd 1_infrastructure && terraform apply
+docker push gcr.io/$PROJECT_ID/golang-ha:latest
+kubectl apply -f ../2_application/k8s-manifests/
+kubectl apply -f ../3_security/
+```
+
+### Manual Deployment (Alternative)
+
+```bash
+# 1. Deploy Infrastructure
+cd 1_infrastructure
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your project_id
+terraform init
+terraform apply
+
+# 2. Build and Deploy Application
+cd ../2_application
+docker build -t gcr.io/$PROJECT_ID/golang-ha:latest ./golang-server/
+docker push gcr.io/$PROJECT_ID/golang-ha:latest
+kubectl apply -f k8s-manifests/
+
+# 3. Apply Security Policies
+cd ../3_security
+kubectl apply -f zero-trust-policies.yaml
+kubectl apply -f pod-security-policies.yaml
+kubectl apply -f waf-policies.yaml
+terraform apply  # For audit logging
+```
+
+## Access Services
+
+```bash
+# Get cluster credentials
+gcloud container clusters get-credentials golang-ha-primary --region us-central1
+gcloud container clusters get-credentials golang-ha-secondary --region europe-west1
+
+# Access application
+kubectl get svc -A
+
+# Access Grafana monitoring
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+# http://localhost:3000 (admin/admin123)
+
+# Access ArgoCD
+kubectl port-forward -n argocd svc/argocd-server 8080:443
+# https://localhost:8080
+```
+
+## Testing
+
 ```bash
 # Load configuration
 source config.env
 
-# Test CI/CD functionality
-./test-cicd.sh
-
-# Test canary deployments
-./test-canary.sh
-
-# Test disaster recovery
-./test-dr.sh
+# Run test suites
+./test-cicd.sh      # CI/CD pipeline
+./test-canary.sh    # Canary deployments  
+./test-dr.sh        # Disaster recovery
+./test-monitoring.sh # Monitoring stack
+./test-waf.sh       # Security policies
 ```
-
-### 3. Cleanup
-```bash
-# Destroy all resources
-./destroy.sh
-```
-
-## Simplified Structure
-
-```
-├── setup.sh              # Complete setup and deployment
-├── test-cicd.sh          # CI/CD testing (Holded requirements)
-├── test-canary.sh        # Canary testing (Holded requirements)
-├── test-dr.sh            # Disaster recovery testing (Holded requirements)
-├── destroy.sh            # Cleanup all resources
-├── config.env            # Generated configuration
-├── infrastructure/       # Terraform modules
-├── application/          # Golang application
-└── docs/                # Documentation
-```
-
-## Testing Strategy
-
-### CI/CD Testing (`test-cicd.sh`)
-- Container build and push
-- Application deployment
-- Canary deployments
-- Multi-cluster deployment
-- Load balancer and SSL
-- Automated rollback simulation
-
-### Canary Testing (`test-canary.sh`)
-- Canary deployment health
-- Production vs canary comparison
-- Health monitoring
-- Traffic distribution simulation
-- Rollback functionality
-
-### Disaster Recovery Testing (`test-dr.sh`)
-- Multi-region failover architecture
-- Load balancer failover
-- Cross-region data replication
-- RTO validation (target: ≤60s)
-- RPO validation
-- Application health after failover
 
 ## Architecture
 
-### Multi-Region Setup
-- **Primary**: europe-west1 (Belgium)
-- **Secondary**: europe-west3 (Frankfurt)
-- **Load Balancer**: Global HTTP(S) load balancer
-- **Networking**: VPC with private clusters
+- **Multi-region**: us-central1 (primary) + europe-west1 (secondary)
+- **Load Balancer**: Global HTTPS with automatic failover
+- **Clusters**: GKE with auto-scaling (e2-standard-8 nodes)
+- **Monitoring**: Prometheus + Grafana
+- **CI/CD**: GitHub Actions with canary deployments
+- **Security**: Zero Trust + Vault + WAF + Audit logging
 
-### Components
-- **GKE Clusters**: 2 clusters with auto-scaling
-- **Application**: Golang server with 3 replicas + canary
-- **Monitoring**: Prometheus + Grafana stack
-- **GitOps**: ArgoCD for continuous deployment
-- **Security**: Vault, WAF, audit logging
-- **Load Balancer**: SSL termination and health checks
+## Cleanup
 
-## Monitoring & Observability
+```bash
+# Run cleanup script (basic cleanup)
+./destroy.sh
 
-- **Application Metrics**: Custom Prometheus metrics
-- **Infrastructure**: GCP Cloud Monitoring
-- **Logging**: Cloud Logging with BigQuery
-- **Alerts**: Automated alerting for failures
-- **Dashboards**: Grafana dashboards for visualization
+# Verify all resources are deleted manually
+gcloud compute instances list
+gcloud container clusters list
+```
 
-## Security Features
+---
 
-- **Zero Trust**: Network policies and service mesh
-- **Secrets Management**: HashiCorp Vault
-- **Pod Security**: Security policies and RBAC
-- **WAF**: Istio-based web application firewall
-- **Audit Logging**: Comprehensive security logging
-- **SSL/TLS**: End-to-end encryption
+## Known Limitations
 
-## Auto-scaling
+- **Demonstration Purpose**: Scripts are simplified for challenge evaluation
+- **Limited Testing**: Full end-to-end testing was limited due to GCP quota constraints
+- **Manual Steps**: Full deployment requires manual verification and configuration
+- **GCP Quotas**: Requires sufficient GCP quotas for multi-region deployment
+- **Costs**: Will incur GCP charges (estimate: $50-100/day for testing)
+- **Production Readiness**: Additional testing and configuration needed for production
+- **Certificates**: Uses self-signed certificates (replace with valid ones for production)
 
-- **HPA**: Horizontal Pod Autoscaler
-- **VPA**: Vertical Pod Autoscaler
-- **Custom Metrics**: Application-specific scaling
-- **Node Auto-scaling**: Cluster-level scaling
+## Development Notes
 
-## RTO/RPO Targets
+- **Version Control**: Full development history available in Git commits
+- **Iterative Development**: Multiple iterations based on testing and troubleshooting
+- **GCP Constraints**: Testing limited by quota restrictions and cost considerations
+- **Challenge Focus**: Prioritized code completeness over extensive testing
 
-- **RTO (Recovery Time Objective)**: ≤60 seconds
-- **RPO (Recovery Point Objective)**: Near-zero data loss
-- **Failover**: Automatic cross-region failover
-- **Testing**: Automated DR testing included
+---
 
-## Documentation
-
-- [Architecture Diagram](docs/ARCHITECTURE_DIAGRAM.md)
-- [Technical Decisions](docs/TECHNICAL_DECISIONS.md)
-- [Disaster Recovery Plan](docs/DISASTER_RECOVERY_PLAN.md)
-- [Interview Summary](docs/INTERVIEW_SUMMARY.md)
-
-## Contributing
-
-This solution is designed to be easily testable by anyone:
-1. Clone the repository
-2. Run `./setup.sh`
-3. Test with the provided scripts
-4. Clean up with `./destroy.sh`
-
-All scripts are self-contained and will work with any GCP project.
+**Challenge Requirements Compliance:**
+Infrastructure (Terraform + GKE + Multi-region + Monitoring + Auto-scaling)  
+Application (CI/CD + Containers + Canary + HTTPS/443)  
+Security (Zero Trust + Vault + Pod Security + WAF + Audit)  
